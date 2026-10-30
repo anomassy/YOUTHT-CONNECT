@@ -1,9 +1,9 @@
-import { pgTable, serial, text, integer, timestamp } from "drizzle-orm/pg-core";
+import { table, serial, text, integer, timestamp } from "./dialect";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
 // room: "friends" (real usernames, for making friends) or "anonymous" (aliases)
-export const chatMessagesTable = pgTable("chat_messages", {
+export const chatMessagesTable = table("chat_messages", {
   id: serial("id").primaryKey(),
   room: text("room").notNull(),
   userId: integer("user_id").notNull(),
@@ -12,7 +12,7 @@ export const chatMessagesTable = pgTable("chat_messages", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const questionsTable = pgTable("questions", {
+export const questionsTable = table("questions", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull(),
   ticketCode: text("ticket_code").notNull(),

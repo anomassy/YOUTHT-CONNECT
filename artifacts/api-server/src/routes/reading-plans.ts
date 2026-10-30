@@ -14,11 +14,11 @@ router.get("/reading-plans", requireAuth, async (_req, res) => {
   const plans = await db.select().from(readingPlansTable);
   const days = await db.select().from(readingPlanDaysTable);
   return res.json({
-    plans: plans.map((p) => ({
+    plans: plans.map((p: { id: number; [key: string]: unknown }) => ({
       ...p,
       days: days
-        .filter((d) => d.planId === p.id)
-        .sort((a, b) => a.dayNumber - b.dayNumber),
+        .filter((d: { planId: number; dayNumber: number }) => d.planId === p.id)
+        .sort((a: { dayNumber: number }, b: { dayNumber: number }) => a.dayNumber - b.dayNumber),
     })),
   });
 });

@@ -14,9 +14,12 @@ router.get("/events", requireAuth, async (req: AuthedRequest, res) => {
     .select()
     .from(eventRsvpsTable)
     .where(eq(eventRsvpsTable.userId, req.userId!));
-  const rsvpEventIds = new Set(mine.map((r) => r.eventId));
+  const rsvpEventIds = new Set<number>(mine.map((r: { eventId: number }) => r.eventId));
   return res.json({
-    events: rows.map((e) => ({ ...e, isRsvped: rsvpEventIds.has(e.id) })),
+    events: rows.map((e: { id: number; [key: string]: unknown }) => ({
+      ...e,
+      isRsvped: rsvpEventIds.has(e.id),
+    })),
   });
 });
 
@@ -43,7 +46,7 @@ router.post("/events/:id/rsvp", requireAuth, async (req: AuthedRequest, res) => 
     .select()
     .from(eventRsvpsTable)
     .where(eq(eventRsvpsTable.eventId, eventId));
-  const already = existing.find((r) => r.userId === req.userId);
+  const already = existing.find((r: { userId: number | undefined; id: number }) => r.userId === req.userId);
   if (already) {
     await db.delete(eventRsvpsTable).where(eq(eventRsvpsTable.id, already.id));
     return res.json({ isRsvped: false });

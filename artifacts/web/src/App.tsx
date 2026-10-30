@@ -5,7 +5,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 
 import { AuthProvider } from './context/AuthContext';
 import { AppProvider } from './context/AppContext';
-import { AuthGuard } from './components/auth-guard';
+import { AdminGuard, AuthGuard } from './components/auth-guard';
 import { Layout } from './components/layout';
 
 import NotFound from '@/pages/not-found';
@@ -46,12 +46,12 @@ function AuthenticatedApp() {
           <Route path="/profile" component={Profile} />
           <Route path="/more" component={More} />
           
-          <Route path="/admin" component={AdminIndex} />
-          <Route path="/admin/devotions" component={AdminDevotions} />
-          <Route path="/admin/events" component={AdminEvents} />
-          <Route path="/admin/questions" component={AdminQuestions} />
-          <Route path="/admin/music" component={AdminMusic} />
-          <Route path="/admin/study-guides" component={AdminStudyGuides} />
+          <Route path="/admin"><AdminGuard><AdminIndex /></AdminGuard></Route>
+          <Route path="/admin/devotions"><AdminGuard><AdminDevotions /></AdminGuard></Route>
+          <Route path="/admin/events"><AdminGuard><AdminEvents /></AdminGuard></Route>
+          <Route path="/admin/questions"><AdminGuard><AdminQuestions /></AdminGuard></Route>
+          <Route path="/admin/music"><AdminGuard><AdminMusic /></AdminGuard></Route>
+          <Route path="/admin/study-guides"><AdminGuard><AdminStudyGuides /></AdminGuard></Route>
           
           <Route component={NotFound} />
         </Switch>

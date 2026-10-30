@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 
-from ..database import db_cursor
+from ..database import db_cursor, insert_returning
 from ..auth import require_auth, require_admin
 
 router = APIRouter()
@@ -28,12 +28,13 @@ def create_devotional(body: CreateDevotionalRequest, user_id: int = Depends(requ
     if not body.title or not body.scriptureRef or not body.scriptureText or not body.body:
         raise HTTPException(400, "Missing required fields.")
     with db_cursor(commit=True) as cur:
-        cur.execute(
+        row = dict(insert_returning(
+            cur,
+            "devotionals",
             """INSERT INTO devotionals (title, scripture_ref, scripture_text, body)
-               VALUES (%s, %s, %s, %s) RETURNING *""",
+               VALUES (%s, %s, %s, %s)""",
             (body.title, body.scriptureRef, body.scriptureText, body.body),
-        )
-        row = dict(cur.fetchone())
+        ))
     return {"devotional": _camel(row)}
 
 

@@ -1,8 +1,8 @@
-import { pgTable, serial, text, integer, boolean, timestamp } from "drizzle-orm/pg-core";
+import { table, serial, text, integer, boolean, timestamp } from "./dialect";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
-export const prayerRequestsTable = pgTable("prayer_requests", {
+export const prayerRequestsTable = table("prayer_requests", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull(),
   content: text("content").notNull(),
@@ -11,7 +11,7 @@ export const prayerRequestsTable = pgTable("prayer_requests", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const prayerPraysTable = pgTable("prayer_prays", {
+export const prayerPraysTable = table("prayer_prays", {
   id: serial("id").primaryKey(),
   prayerRequestId: integer("prayer_request_id").notNull(),
   userId: integer("user_id").notNull(),

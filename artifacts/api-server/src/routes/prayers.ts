@@ -30,10 +30,19 @@ router.get("/prayers", requireAuth, async (req: AuthedRequest, res) => {
     .select()
     .from(prayerPraysTable)
     .where(eq(prayerPraysTable.userId, req.userId!));
-  const prayedIds = new Set(mine.map((m) => m.prayerRequestId));
+  const prayedIds = new Set<number>(mine.map((m: { prayerRequestId: number }) => m.prayerRequestId));
 
   return res.json({
-    prayers: rows.map((r) => ({
+    prayers: rows.map((r: {
+      id: number;
+      userId: number;
+      content: string;
+      isAnonymous: boolean;
+      prayCount: number;
+      createdAt: Date;
+      firstName: string | null;
+      username: string | null;
+    }) => ({
       id: r.id,
       content: r.content,
       isAnonymous: r.isAnonymous,

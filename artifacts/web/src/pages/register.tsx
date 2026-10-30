@@ -10,6 +10,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Church } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { SignUp } from '@clerk/react';
+import { isClerkEnabled } from '@/context/AuthContext';
 
 const registerSchema = z.object({
   firstName: z.string().min(1, 'First name is required'),
@@ -35,6 +37,19 @@ export default function Register() {
       password: '',
     },
   });
+
+  if (isClerkEnabled) {
+    return (
+      <div className="min-h-[100dvh] flex items-center justify-center p-4 bg-background">
+        <div className="space-y-6">
+          <div className="text-center">
+            <h1 className="text-2xl font-serif text-primary tracking-tight">Join Youth Connect</h1>
+          </div>
+          <SignUp routing="hash" forceRedirectUrl="/" />
+        </div>
+      </div>
+    );
+  }
 
   const onSubmit = (values: z.infer<typeof registerSchema>) => {
     registerMutation.mutate(

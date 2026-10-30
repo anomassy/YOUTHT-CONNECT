@@ -6,14 +6,71 @@ import { Button } from '@/components/ui/button';
 import { BookMarked, CheckCircle2, Circle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Progress } from '@/components/ui/progress';
+import { useAuth } from '@/context/AuthContext';
+import { useEffect } from 'react';
+
+type DailyReading = {
+  dayId?: number;
+  dayNumber?: number;
+  passage: string | null;
+  date?: string;
+  summary: string | null;
+  completed?: boolean;
+  complete: boolean;
+};
 
 export default function ReadingPlans() {
+  const { token, getToken } = useAuth();
   const queryClient = useQueryClient();
   const [openDayId, setOpenDayId] = useState<number | null>(null);
   const [openedDayIds, setOpenedDayIds] = useState<Set<number>>(new Set());
+  const [dailyReading, setDailyReading] = useState<DailyReading | null>(null);
+  const [dailyLoading, setDailyLoading] = useState(true);
+  const [dailyError, setDailyError] = useState('');
   const { data: plansData, isLoading: plansLoading } = useListReadingPlans();
   const { data: progressData, isLoading: progressLoading } = useGetReadingProgress();
   const completeDay = useCompleteReadingDay();
+
+  useEffect(() => {
+    if (!token) return;
+    let active = true;
+    const loadDailyReading = async () => {
+      try {
+        const token = await getToken();
+        if (!token) throw new Error('Your session has expired. Sign in again.');
+        const response = await fetch('/api/reading-plans/daily', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.detail || 'Could not load today’s reading.');
+        const reading = result.reading as DailyReading;
+        if (!active) return;
+        setDailyReading(reading);
+        setDailyError('');
+        if (!reading.complete && !reading.summary) {
+          const summaryResponse = await fetch('/api/reading-plans/daily-summary', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const summaryResult = await summaryResponse.json();
+          if (!summaryResponse.ok) throw new Error(summaryResult.detail || 'Could not generate today’s summary.');
+          if (active) {
+            setDailyReading((current) => current
+              ? { ...current, summary: summaryResult.summary as string }
+              : current);
+          }
+        }
+      } catch (error) {
+        if (active) {
+          setDailyError(error instanceof Error ? error.message : 'Could not load today’s reading.');
+        }
+      } finally {
+        if (active) setDailyLoading(false);
+      }
+    };
+    void loadDailyReading();
+    return () => { active = false; };
+  }, [getToken, token]);
 
   const plans = plansData?.plans || [];
   const completedDayIds = new Set(progressData?.progress?.filter(p => p.completed).map(p => p.planDayId) || []);
@@ -37,7 +94,20 @@ export default function ReadingPlans() {
     }
   };
 
-  if (plansLoading || progressLoading) {
+  const handleDailyComplete = () => {
+    if (!dailyReading?.dayId) return;
+    completeDay.mutate(
+      { dayId: dailyReading.dayId },
+      {
+        onSuccess: () => {
+          setDailyReading((current) => current ? { ...current, completed: true } : current);
+          queryClient.invalidateQueries({ queryKey: getGetReadingProgressQueryKey() });
+        },
+      },
+    );
+  };
+
+  if (plansLoading || progressLoading || dailyLoading) {
     return (
       <div className="p-4 max-w-4xl mx-auto space-y-4">
         <div className="h-48 bg-muted animate-pulse rounded-xl" />
@@ -52,6 +122,41 @@ export default function ReadingPlans() {
         <h1 className="text-3xl font-serif text-primary">Reading Plans</h1>
         <p className="text-muted-foreground">Journey through the Word together.</p>
       </div>
+
+      <Card className="border-primary/20">
+        <CardHeader className="bg-primary/5">
+          <CardTitle className="font-serif">Today’s Bible chapter</CardTitle>
+          <CardDescription>
+            {dailyReading?.date ? new Date(`${dailyReading.date}T00:00:00`).toLocaleDateString() : 'Your daily reading'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4 p-5">
+          {dailyReading?.complete ? (
+            <p className="text-sm text-muted-foreground">You’ve reached the end of this Bible reading schedule. Well done!</p>
+          ) : dailyReading ? (
+            <>
+              <h2 className="text-xl font-semibold text-primary">
+                Day {dailyReading.dayNumber}: {dailyReading.passage}
+              </h2>
+              {dailyReading.summary ? (
+                <p className="text-sm leading-6">{dailyReading.summary}</p>
+              ) : (
+                <p role={dailyError ? 'alert' : undefined} className={dailyError ? 'text-sm text-destructive' : 'text-sm text-muted-foreground'}>
+                  {dailyError || 'The chapter summary is not available yet.'}
+                </p>
+              )}
+              <Button
+                onClick={handleDailyComplete}
+                disabled={dailyReading.completed || completeDay.isPending}
+              >
+                {dailyReading.completed ? 'Completed for today' : completeDay.isPending ? 'Saving…' : 'Mark today as read'}
+              </Button>
+            </>
+          ) : dailyError ? (
+            <p role="alert" className="text-sm text-destructive">{dailyError}</p>
+          ) : null}
+        </CardContent>
+      </Card>
 
       <div className="space-y-8">
         {plans.map(plan => {

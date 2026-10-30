@@ -1,6 +1,6 @@
 import os
 
-from server.database import create_tables, get_connection
+from server.database import create_tables, table_names
 
 
 if __name__ == "__main__":
@@ -14,18 +14,16 @@ if __name__ == "__main__":
         "reading_plans",
         "reading_plan_days",
         "reading_progress",
+        "reading_summaries",
         "prayer_requests",
         "prayer_prays",
         "events",
         "event_rsvps",
         "chat_messages",
         "questions",
+        "music_tracks",
     )
-    with get_connection() as connection, connection.cursor() as cursor:
-        cursor.execute(
-            "SELECT tablename FROM pg_tables WHERE schemaname = 'public'"
-        )
-        existing_tables = {row[0] for row in cursor.fetchall()}
+    existing_tables = table_names()
 
     missing_tables = set(required_tables) - existing_tables
     if missing_tables:

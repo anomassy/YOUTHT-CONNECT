@@ -1,8 +1,8 @@
-import { pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { table, serial, text, timestamp } from "./dialect";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
-export const devotionalsTable = pgTable("devotionals", {
+export const devotionalsTable = table("devotionals", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
   scriptureRef: text("scripture_ref").notNull(),

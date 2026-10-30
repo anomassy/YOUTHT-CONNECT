@@ -1,0 +1,12 @@
+.git
+.venv
+node_modules
+**/node_modules
+**/__pycache__
+.env
+.env.*
+!.env.example
+artifacts/api-server/storage
+artifacts/api-server/oracle-wallet
+artifacts/web/dist
+dist

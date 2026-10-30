@@ -5,11 +5,21 @@ dist
 tmp
 out-tsc
 *.tsbuildinfo
+__pycache__/
+*.py[cod]
 .expo
 .expo-shared
 
 # dependencies
 node_modules
+.venv/
+artifacts/api-server/storage/
+artifacts/api-server/oracle-wallet/
+
+# local configuration
+.env
+.env.*
+!.env.example
 
 # IDEs and editors
 /.idea

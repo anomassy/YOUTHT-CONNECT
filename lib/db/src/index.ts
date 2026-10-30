@@ -1,4 +1,6 @@
 import { drizzle } from "drizzle-orm/node-postgres";
+import { drizzle as drizzleMysql } from "drizzle-orm/mysql2";
+import { createPool } from "mysql2/promise";
 import pg from "pg";
 import * as schema from "./schema";
 
@@ -10,7 +12,19 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
-export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-export const db = drizzle(pool, { schema });
+const url = process.env.DATABASE_URL;
+const isMysql = url.startsWith("mysql://") || url.startsWith("mysql2://");
+
+export const pool: any = isMysql
+  ? undefined
+  : new Pool({ connectionString: url });
+
+export const mysqlPool: any = isMysql
+  ? createPool({ uri: url, waitForConnections: true, connectionLimit: 10 })
+  : undefined;
+
+export const db: any = isMysql
+  ? (drizzleMysql(mysqlPool, { schema, mode: "default" }) as any)
+  : (drizzle(pool, { schema }) as any);
 
 export * from "./schema";

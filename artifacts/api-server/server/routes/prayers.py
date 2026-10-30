@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 
-from ..database import db_cursor
+from ..database import db_cursor, insert_returning
 from ..auth import require_auth
 
 router = APIRouter()
@@ -47,12 +47,13 @@ def create_prayer(body: CreatePrayerRequest, user_id: int = Depends(require_auth
     if not body.content or not body.content.strip():
         raise HTTPException(400, "Prayer request content is required.")
     with db_cursor(commit=True) as cur:
-        cur.execute(
+        row = dict(insert_returning(
+            cur,
+            "prayer_requests",
             """INSERT INTO prayer_requests (user_id, content, is_anonymous)
-               VALUES (%s, %s, %s) RETURNING *""",
+               VALUES (%s, %s, %s)""",
             (user_id, body.content.strip(), body.isAnonymous),
-        )
-        row = dict(cur.fetchone())
+        ))
     return {"prayer": {
         "id": row["id"],
         "userId": row["user_id"],

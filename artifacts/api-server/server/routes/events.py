@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from datetime import datetime
 
-from ..database import db_cursor
+from ..database import db_cursor, insert_returning
 from ..auth import require_auth, require_admin
 
 router = APIRouter()
@@ -47,12 +47,13 @@ def create_event(body: CreateEventRequest, user_id: int = Depends(require_admin)
     except ValueError:
         raise HTTPException(400, "Invalid startsAt date format.")
     with db_cursor(commit=True) as cur:
-        cur.execute(
+        row = dict(insert_returning(
+            cur,
+            "events",
             """INSERT INTO events (title, description, location, starts_at)
-               VALUES (%s, %s, %s, %s) RETURNING *""",
+               VALUES (%s, %s, %s, %s)""",
             (body.title, body.description, body.location, starts_at),
-        )
-        row = dict(cur.fetchone())
+        ))
     return {"event": {
         "id": row["id"],
         "title": row["title"],

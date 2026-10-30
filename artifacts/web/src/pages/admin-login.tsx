@@ -24,7 +24,7 @@ export default function AdminLogin() {
       },
       onError: (error: any) => {
         const message = error?.status === 503
-          ? 'The admin password has not been configured in Replit Secrets yet.'
+          ? 'The admin password has not been configured in the local .env file.'
           : 'That admin password is not correct.';
         toast({ title: 'Admin login failed', description: message, variant: 'destructive' });
         setPassword('');
@@ -43,7 +43,7 @@ export default function AdminLogin() {
         <Card className="border-border shadow-xl">
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><Lock className="w-5 h-5 text-primary" /> Admin access</CardTitle>
-            <CardDescription>Enter the administrator password stored in Replit Secrets.</CardDescription>
+            <CardDescription>Enter the administrator password configured for this system.</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={submit} className="space-y-4">

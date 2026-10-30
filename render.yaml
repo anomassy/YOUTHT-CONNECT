@@ -1,16 +1,25 @@
 services:
   - type: web
-    name: youth-connect
-    runtime: python
+    name: youtht-connect
+    runtime: docker
     plan: free
-    buildCommand: pip install -r artifacts/api-server/requirements.txt
-    startCommand: uvicorn server.main:app --app-dir artifacts/api-server --host 0.0.0.0 --port $PORT
-    preDeployCommand: python artifacts/api-server/predeploy.py
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     healthCheckPath: /api/healthz
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.13.0
       - key: DATABASE_URL
+        value: oracle://
+      - key: ORACLE_USER
+        sync: false
+      - key: ORACLE_PASSWORD
+        sync: false
+      - key: ORACLE_DSN
+        sync: false
+      - key: ORACLE_WALLET_LOCATION
+        value: /etc/secrets
+      - key: ORACLE_WALLET_PASSWORD
+        sync: false
+      - key: ADMIN_PASSWORD
         sync: false
       - key: SESSION_SECRET
         generateValue: true

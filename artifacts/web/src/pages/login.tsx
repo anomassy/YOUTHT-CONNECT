@@ -11,6 +11,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Church } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { SignIn } from '@clerk/react';
+import { isClerkEnabled } from '@/context/AuthContext';
 
 const loginSchema = z.object({
   identifier: z.string().min(1, 'Email or username is required'),
@@ -19,7 +21,7 @@ const loginSchema = z.object({
 
 export default function Login() {
   const [, setLocation] = useLocation();
-  const { login } = useAuth();
+  const { login, error: authError, logout } = useAuth();
   const { toast } = useToast();
   const loginMutation = useLogin();
   const lastLogoTap = useRef(0);
@@ -41,6 +43,35 @@ export default function Login() {
       password: '',
     },
   });
+
+  if (isClerkEnabled) {
+    return (
+      <div className="min-h-[100dvh] flex items-center justify-center p-4 bg-background">
+        <div className="space-y-6">
+          <div className="text-center">
+            <button
+              type="button"
+              aria-label="Youth Connect admin login"
+              onClick={handleLogoTap}
+              className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg"
+            >
+              <Church className="h-8 w-8" aria-hidden="true" />
+            </button>
+            <h1 className="text-3xl font-serif text-primary tracking-tight">Youth Connect</h1>
+            <p className="mt-2 text-muted-foreground">Welcome back to fellowship.</p>
+          </div>
+          {authError ? (
+            <div className="max-w-md space-y-4 text-center">
+              <p role="alert" className="text-sm text-destructive">{authError}</p>
+              <button type="button" className="text-sm underline" onClick={logout}>Sign out</button>
+            </div>
+          ) : (
+            <SignIn routing="hash" forceRedirectUrl="/" />
+          )}
+        </div>
+      </div>
+    );
+  }
 
   const onSubmit = (values: z.infer<typeof loginSchema>) => {
     loginMutation.mutate(

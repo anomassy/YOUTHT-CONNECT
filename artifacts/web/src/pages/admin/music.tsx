@@ -13,10 +13,12 @@ import { Button } from '@/components/ui/button';
 import { Music2, Trash2, Upload } from 'lucide-react';
 import { formatTime } from '@/lib/format';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/context/AuthContext';
 
 export default function AdminMusic() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { getToken } = useAuth();
   const { data } = useListMusic();
   const requestUpload = useRequestUploadUrl();
   const create = useCreateMusic();
@@ -49,9 +51,16 @@ export default function AdminMusic() {
       const upload = await requestUpload.mutateAsync({
         data: { name: file.name, size: file.size, contentType: file.type || 'audio/mpeg' },
       });
-      const uploaded = await fetch(upload.uploadURL, {
+      const uploadUrl = new URL(upload.uploadURL, window.location.href);
+      const headers = new Headers({ 'Content-Type': file.type || 'audio/mpeg' });
+      if (uploadUrl.origin === window.location.origin) {
+        const token = await getToken();
+        if (!token) throw new Error('Your administrator session has expired. Sign in again.');
+        headers.set('Authorization', `Bearer ${token}`);
+      }
+      const uploaded = await fetch(uploadUrl, {
         method: 'PUT',
-        headers: { 'Content-Type': file.type || 'audio/mpeg' },
+        headers,
         body: file,
       });
       if (!uploaded.ok) throw new Error('Audio upload failed.');
