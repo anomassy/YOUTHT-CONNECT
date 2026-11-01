@@ -137,8 +137,11 @@ def login(body: LoginRequest):
 @router.post("/auth/admin-login")
 def admin_login(body: AdminLoginRequest):
     configured_password = os.environ.get("ADMIN_PASSWORD")
-    if not configured_password:
-        raise HTTPException(503, "Admin password is not configured. Set ADMIN_PASSWORD in the local .env file.")
+    if not configured_password or not configured_password.strip():
+        raise HTTPException(
+            503,
+            "Admin password is not configured. Set ADMIN_PASSWORD in the Render web service's Environment settings, then redeploy or restart the service.",
+        )
     if not hmac.compare_digest(body.password, configured_password):
         raise HTTPException(401, "Invalid administrator password.")
     return {"token": sign_token(0, is_admin=True), "isAdmin": True}

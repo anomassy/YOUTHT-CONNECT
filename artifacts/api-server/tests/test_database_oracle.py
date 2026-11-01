@@ -9,12 +9,14 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 with patch.dict(os.environ, {"DATABASE_URL": "oracle://", "AUTH_PROVIDER": "clerk"}):
+    from fastapi import HTTPException
     from server.database import (
         OracleCursor,
         _oracle_bind_values,
         _oracle_ddl,
         _oracle_sql,
     )
+    from server.routes.auth import AdminLoginRequest, admin_login
     from server.routes.reading_plans import _openai_http_error
 
 
@@ -57,6 +59,26 @@ class FakeLob:
 
 
 class OracleDatabaseTests(unittest.TestCase):
+    def test_admin_login_explains_render_configuration_when_password_missing(self):
+        with patch.dict(os.environ, {"ADMIN_PASSWORD": ""}):
+            with self.assertRaises(HTTPException) as error:
+                admin_login(AdminLoginRequest(password="anything"))
+
+        self.assertEqual(error.exception.status_code, 503)
+        self.assertIn("Render web service", error.exception.detail)
+        self.assertIn("redeploy or restart", error.exception.detail)
+
+    def test_admin_login_uses_password_from_runtime_environment(self):
+        with (
+            patch.dict(os.environ, {"ADMIN_PASSWORD": "configured-password"}),
+            patch("server.routes.auth.sign_token", return_value="admin-token"),
+        ):
+            result = admin_login(
+                AdminLoginRequest(password="configured-password")
+            )
+
+        self.assertEqual(result, {"token": "admin-token", "isAdmin": True})
+
     def test_sql_translation(self):
         self.assertEqual(
             _oracle_sql(

@@ -9,7 +9,7 @@ Youth Connect runs as a Render web service with a Render-managed PostgreSQL data
    - The `youtht-connect` web service, built from `Dockerfile`.
    - The `youtht-connect-db` PostgreSQL database.
 3. Review the Blueprint resources and approve creation. The web service's `DATABASE_URL` is linked to the database's private connection string; do not enter a separate database URL.
-4. Provide a strong `ADMIN_PASSWORD` when prompted. Render generates `SESSION_SECRET` automatically; keep it stable.
+4. Provide a strong `ADMIN_PASSWORD` when prompted, or set it under the web service's **Environment** settings. This variable must be set on the web service (not the PostgreSQL resource). Render generates `SESSION_SECRET` automatically; keep it stable.
 5. After creation, wait for the database and web service to become available. The API creates missing database tables at startup and does not drop existing data.
 6. Visit `https://youtht-connect.onrender.com/api/healthz` and confirm the health check succeeds, then open `https://youtht-connect.onrender.com`.
 
@@ -59,3 +59,4 @@ Add the Clerk and OpenAI variables above to the Render web service's environment
 - **Clerk sign-in fails:** Check the production publishable key, issuer, JWKS URL, and that `CLERK_ALLOWED_ORIGINS` exactly matches the token's authorized-party origin.
 - **AI summaries unavailable:** Check `OPENAI_API_KEY`, the selected `OPENAI_MODEL`, and the OpenAI project's quota and model permissions.
 - **Database nearing expiration:** Back up or migrate the free database to a paid Render PostgreSQL database before its expiration date.
+- **Admin login says the password is not configured:** In Render, open the deployed `YOUTHT-CONNECT` web service (not the Blueprint page or PostgreSQL resource), go to **Environment**, and add `ADMIN_PASSWORD` with a non-empty value. Save the change and wait for the service to redeploy or manually restart it. Then retry the admin login. Changing the variable locally or on the database resource does not change the running web service's environment.
