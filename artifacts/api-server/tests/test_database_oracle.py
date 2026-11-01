@@ -10,6 +10,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 with patch.dict(os.environ, {"DATABASE_URL": "oracle://", "AUTH_PROVIDER": "clerk"}):
     from fastapi import HTTPException
+    from starlette.routing import Match
     from server.database import (
         OracleCursor,
         _oracle_bind_values,
@@ -19,6 +20,7 @@ with patch.dict(os.environ, {"DATABASE_URL": "oracle://", "AUTH_PROVIDER": "cler
     )
     from server.routes.music import _database_object_response
     from server.routes.auth import AdminLoginRequest, admin_login
+    from server.routes.chat import router as chat_router
     from server.routes.reading_plans import _openai_http_error
     from server.storage import request_audio_upload, request_profile_photo_upload
 
@@ -62,6 +64,24 @@ class FakeLob:
 
 
 class OracleDatabaseTests(unittest.TestCase):
+    def test_direct_message_user_route_precedes_parameterized_chat_room(self):
+        matching_route = next(
+            route
+            for route in chat_router.routes
+            if route.matches(
+                {
+                    "type": "http",
+                    "path": "/chat/users",
+                    "root_path": "",
+                    "method": "GET",
+                    "headers": [],
+                }
+            )[0]
+            is Match.FULL
+        )
+
+        self.assertEqual(matching_route.endpoint.__name__, "list_chat_users")
+
     def test_postgres_storage_returns_database_upload_urls_for_audio_and_photos(self):
         with patch.dict(os.environ, {"STORAGE_BACKEND": "postgres"}):
             audio = request_audio_upload("song.mp3", 100, "audio/mpeg")

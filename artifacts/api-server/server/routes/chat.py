@@ -24,6 +24,28 @@ class AnswerQuestionRequest(BaseModel):
     answer: str
 
 
+@router.get("/chat/users")
+def list_chat_users(user_id: int = Depends(require_auth)):
+    with db_cursor() as cur:
+        cur.execute(
+            """SELECT id, first_name, last_name, username FROM users
+               WHERE id != %s ORDER BY first_name, last_name""",
+            (user_id,),
+        )
+        users = [dict(row) for row in cur.fetchall()]
+    return {
+        "users": [
+            {
+                "id": row["id"],
+                "firstName": row["first_name"],
+                "lastName": row["last_name"],
+                "username": row["username"],
+            }
+            for row in users
+        ]
+    }
+
+
 @router.get("/chat/{room}")
 def list_messages(room: str, user_id: int = Depends(require_auth)):
     if room not in VALID_ROOMS:
@@ -94,28 +116,6 @@ def _message_out(row: dict) -> dict:
             else None
         ),
         "createdAt": row["created_at"],
-    }
-
-
-@router.get("/chat/users")
-def list_chat_users(user_id: int = Depends(require_auth)):
-    with db_cursor() as cur:
-        cur.execute(
-            """SELECT id, first_name, last_name, username FROM users
-               WHERE id != %s ORDER BY first_name, last_name""",
-            (user_id,),
-        )
-        users = [dict(row) for row in cur.fetchall()]
-    return {
-        "users": [
-            {
-                "id": row["id"],
-                "firstName": row["first_name"],
-                "lastName": row["last_name"],
-                "username": row["username"],
-            }
-            for row in users
-        ]
     }
 
 

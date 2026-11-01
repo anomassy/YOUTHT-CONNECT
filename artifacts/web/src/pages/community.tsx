@@ -12,7 +12,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Copy, Forward, MessageSquareQuote, Reply, Send, Trash2, User as UserIcon, UserCircle, Users } from 'lucide-react';
+import { Copy, Forward, Info, MessageSquareQuote, Reply, Send, Trash2, User as UserIcon, UserCircle, Users } from 'lucide-react';
 import { formatDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -35,10 +35,12 @@ export default function Community() {
         const response = await fetch('/api/chat/users', {
           headers: { Authorization: `Bearer ${freshToken}` },
         });
-        if (!response.ok) throw new Error('Could not load members for direct messages.');
-        const result = await response.json() as { users: ChatUser[] };
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.detail || 'Could not load members for direct messages.');
+        }
         if (active) {
-          setUsers(result.users);
+          setUsers(result.users as ChatUser[]);
           setUsersError('');
         }
       } catch (error) {
@@ -156,6 +158,8 @@ function ChatRoom({
   const [forwardMessage, setForwardMessage] = useState<ChatMessage | null>(null);
   const [forwardToUserId, setForwardToUserId] = useState<number | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [selectedMessageId, setSelectedMessageId] = useState<number | null>(null);
+  const [actionsMessageId, setActionsMessageId] = useState<number | null>(null);
   const [loadError, setLoadError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -259,7 +263,11 @@ function ChatRoom({
             return (
               <div
                 key={msg.id}
-                className={cn("flex flex-col max-w-[85%]", isMe ? "ml-auto items-end" : "mr-auto items-start")}
+                className={cn(
+                  "flex flex-col max-w-[85%] rounded-lg transition-colors",
+                  isMe ? "ml-auto items-end" : "mr-auto items-start",
+                  selectedMessageId === msg.id && "ring-2 ring-primary/60 ring-offset-2 ring-offset-background",
+                )}
                 onTouchStart={(event) => { touchStartX.current = event.touches[0]?.clientX ?? null; }}
                 onTouchEnd={(event) => {
                   const endX = event.changedTouches[0]?.clientX;
@@ -270,7 +278,23 @@ function ChatRoom({
                 }}
               >
                 <span className="text-[10px] text-muted-foreground mb-1 px-1">{msg.displayName}</span>
-                <div className={cn(
+                <div
+                  role="button"
+                  tabIndex={0}
+                  aria-pressed={selectedMessageId === msg.id}
+                  aria-label={`Select message from ${msg.displayName}`}
+                  onClick={() => {
+                    setSelectedMessageId((current) => current === msg.id ? null : msg.id);
+                    setActionsMessageId(null);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      setSelectedMessageId((current) => current === msg.id ? null : msg.id);
+                      setActionsMessageId(null);
+                    }
+                  }}
+                  className={cn(
                   "px-4 py-2 rounded-2xl text-sm",
                   isMe ? "bg-primary text-primary-foreground rounded-tr-sm" : "bg-muted rounded-tl-sm"
                 )}>
@@ -282,7 +306,24 @@ function ChatRoom({
                   )}
                   {msg.content}
                 </div>
-                <div className="mt-1 flex gap-1">
+                {selectedMessageId === msg.id && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    aria-label="Message information and actions"
+                    title="Message information and actions"
+                    aria-expanded={actionsMessageId === msg.id}
+                    onClick={() => setActionsMessageId((current) => current === msg.id ? null : msg.id)}
+                  >
+                    <Info className="h-4 w-4" />
+                  </Button>
+                )}
+                <div className={cn(
+                  "mt-1 flex gap-1",
+                  selectedMessageId === msg.id && actionsMessageId === msg.id ? "flex" : "hidden",
+                )}>
                   <Button variant="ghost" size="icon" className="h-7 w-7" title="Reply" aria-label="Reply" onClick={() => setReplyTo(msg)}>
                     <Reply className="h-3.5 w-3.5" />
                   </Button>
