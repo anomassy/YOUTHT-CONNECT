@@ -15,7 +15,7 @@ services:
           name: youtht-connect-db
           property: connectionString
       - key: ADMIN_PASSWORD
-        sync: false
+        sync: true
       - key: SESSION_SECRET
         generateValue: true
 
