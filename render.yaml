@@ -1,11 +1,14 @@
 services:
   - type: web
-    name: youtht-connect
+    name: YOUTHT-CONNECT
     runtime: docker
     plan: free
+    region: oregon
+    repo: https://github.com/anomassy/YOUTHT-CONNECT
     dockerfilePath: ./Dockerfile
     dockerContext: .
     healthCheckPath: /api/healthz
+    autoDeployTrigger: commit
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -21,3 +24,4 @@ databases:
     databaseName: youth_connect
     user: youth_connect
     plan: free
+    region: oregon
