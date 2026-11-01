@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 import unittest
@@ -20,7 +21,13 @@ with patch.dict(os.environ, {"DATABASE_URL": "oracle://", "AUTH_PROVIDER": "cler
     )
     from server.routes.music import _database_object_response
     from server.routes.auth import AdminLoginRequest, admin_login
-    from server.routes.chat import router as chat_router
+    from server.routes.chat import (
+        _add_message_metadata,
+        _get_message_for_user,
+        _message_out,
+        ask_ai_about_chat_message,
+        router as chat_router,
+    )
     from server.routes.reading_plans import _openai_http_error
     from server.storage import request_audio_upload, request_profile_photo_upload
 
@@ -65,22 +72,128 @@ class FakeLob:
 
 class OracleDatabaseTests(unittest.TestCase):
     def test_direct_message_user_route_precedes_parameterized_chat_room(self):
-        matching_route = next(
-            route
-            for route in chat_router.routes
-            if route.matches(
-                {
-                    "type": "http",
-                    "path": "/chat/users",
-                    "root_path": "",
-                    "method": "GET",
-                    "headers": [],
-                }
-            )[0]
-            is Match.FULL
-        )
+        for path, endpoint_name in (
+            ("/chat/users", "list_chat_users"),
+            ("/chat/reports", "list_chat_reports"),
+        ):
+            matching_route = next(
+                route
+                for route in chat_router.routes
+                if route.matches(
+                    {
+                        "type": "http",
+                        "path": path,
+                        "root_path": "",
+                        "method": "GET",
+                        "headers": [],
+                    }
+                )[0]
+                is Match.FULL
+            )
+            self.assertEqual(matching_route.endpoint.__name__, endpoint_name)
 
-        self.assertEqual(matching_route.endpoint.__name__, "list_chat_users")
+    def test_chat_message_action_lookup_restricts_direct_message_participants(self):
+        class MessageCursor:
+            def execute(self, _statement, _params):
+                pass
+
+            def fetchone(self):
+                return {"room": "dm:4:9", "content": "hello", "user_id": 4}
+
+        message = _get_message_for_user(MessageCursor(), 1, 9)
+        self.assertEqual(message["room"], "dm:4:9")
+        with self.assertRaises(HTTPException) as error:
+            _get_message_for_user(MessageCursor(), 1, 12)
+        self.assertEqual(error.exception.status_code, 403)
+
+    def test_chat_message_stars_are_private_and_pin_metadata_is_visible(self):
+        class MetadataCursor:
+            def __init__(self, starred, pins):
+                self.results = [starred, pins]
+
+            def execute(self, _statement, _params):
+                pass
+
+            def fetchall(self):
+                return self.results.pop(0)
+
+        rows = [{"id": 8, "room": "friends"}]
+        _add_message_metadata(
+            MetadataCursor([{"message_id": 8}], [{"message_id": 8, "pinned_by": 2}]),
+            rows,
+            2,
+            "friends",
+        )
+        self.assertTrue(rows[0]["is_starred"])
+        self.assertTrue(rows[0]["is_pinned"])
+        self.assertTrue(rows[0]["is_pinned_by_me"])
+        self.assertTrue(_message_out({
+            **rows[0],
+            "user_id": 1,
+            "display_name": "Member",
+            "content": "hello",
+            "created_at": "now",
+        })["isStarred"])
+
+        other_user_rows = [{"id": 8, "room": "friends"}]
+        _add_message_metadata(
+            MetadataCursor([], [{"message_id": 8, "pinned_by": 2}]),
+            other_user_rows,
+            3,
+            "friends",
+        )
+        self.assertFalse(other_user_rows[0]["is_starred"])
+        self.assertTrue(other_user_rows[0]["is_pinned"])
+        self.assertFalse(other_user_rows[0]["is_pinned_by_me"])
+
+    def test_chat_ai_uses_server_key_and_returns_mocked_provider_response(self):
+        cursor = unittest.mock.Mock()
+        cursor.fetchone.return_value = {
+            "id": 8,
+            "room": "friends",
+            "user_id": 2,
+            "content": "Please explain this message",
+        }
+        db_context = unittest.mock.MagicMock()
+        db_context.__enter__.return_value = cursor
+        provider_response = unittest.mock.MagicMock()
+        provider_response.__enter__.return_value.read.return_value = json.dumps(
+            {"choices": [{"message": {"content": "Here is an explanation."}}]}
+        ).encode()
+        with (
+            patch("server.routes.chat.db_cursor", return_value=db_context),
+            patch("server.routes.chat.urlopen", return_value=provider_response) as openai_request,
+            patch.dict(os.environ, {"OPENAI_API_KEY": "test-key-not-for-network"}),
+        ):
+            result = ask_ai_about_chat_message(8, user_id=2)
+
+        request = openai_request.call_args.args[0]
+        request_body = json.loads(request.data.decode())
+        self.assertEqual(result, {"answer": "Here is an explanation."})
+        self.assertEqual(request.get_header("Authorization"), "Bearer test-key-not-for-network")
+        self.assertEqual(request_body["messages"][1]["content"], "Please explain this message")
+        openai_request.assert_called_once()
+
+    def test_chat_ai_reports_missing_server_key(self):
+        cursor = unittest.mock.Mock()
+        cursor.fetchone.return_value = {
+            "id": 8,
+            "room": "friends",
+            "user_id": 2,
+            "content": "Please explain this message",
+        }
+        db_context = unittest.mock.MagicMock()
+        db_context.__enter__.return_value = cursor
+        with (
+            patch("server.routes.chat.db_cursor", return_value=db_context),
+            patch("server.routes.chat.urlopen") as openai_request,
+            patch.dict(os.environ, {"OPENAI_API_KEY": ""}),
+        ):
+            with self.assertRaises(HTTPException) as error:
+                ask_ai_about_chat_message(8, user_id=2)
+
+        self.assertEqual(error.exception.status_code, 503)
+        openai_request.assert_not_called()
 
     def test_postgres_storage_returns_database_upload_urls_for_audio_and_photos(self):
         with patch.dict(os.environ, {"STORAGE_BACKEND": "postgres"}):
@@ -108,6 +221,9 @@ class OracleDatabaseTests(unittest.TestCase):
         statements = "\n".join(call.args[0] for call in cursor.execute.call_args_list)
         self.assertIn("CREATE TABLE IF NOT EXISTS stored_objects", statements)
         self.assertIn("file_data BYTEA NOT NULL", statements)
+        self.assertIn("CREATE TABLE IF NOT EXISTS chat_message_stars", statements)
+        self.assertIn("CREATE TABLE IF NOT EXISTS chat_message_pins", statements)
+        self.assertIn("CREATE TABLE IF NOT EXISTS chat_message_reports", statements)
 
     def test_postgres_object_responses_support_audio_byte_ranges(self):
         response = _database_object_response(b"0123456789", "audio/mpeg", "bytes=3-6")
@@ -162,6 +278,11 @@ class OracleDatabaseTests(unittest.TestCase):
             ddl,
         )
         self.assertIn("content CLOB NOT NULL", ddl)
+        self.assertIn("message_content CLOB NOT NULL", _oracle_ddl(
+            """CREATE TABLE IF NOT EXISTS chat_message_reports (
+                message_content TEXT NOT NULL
+            )"""
+        ))
         self.assertIn("completed CHAR(1) DEFAULT 'Y' NOT NULL", ddl)
         self.assertIn("created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP", ddl)
         self.assertNotIn("IF NOT EXISTS", ddl)

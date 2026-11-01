@@ -30,6 +30,7 @@ import AdminEvents from './pages/admin/events';
 import AdminQuestions from './pages/admin/questions';
 import AdminMusic from './pages/admin/music';
 import AdminStudyGuides from './pages/admin/study-guides';
+import AdminChatReports from './pages/admin/chat-reports';
 
 const queryClient = new QueryClient();
 
@@ -55,6 +56,7 @@ function AuthenticatedApp() {
           <Route path="/admin/questions"><AdminGuard><AdminQuestions /></AdminGuard></Route>
           <Route path="/admin/music"><AdminGuard><AdminMusic /></AdminGuard></Route>
           <Route path="/admin/study-guides"><AdminGuard><AdminStudyGuides /></AdminGuard></Route>
+          <Route path="/admin/chat-reports"><AdminGuard><AdminChatReports /></AdminGuard></Route>
           
           <Route component={NotFound} />
         </Switch>

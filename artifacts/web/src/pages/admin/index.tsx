@@ -3,7 +3,7 @@ import { Link, useLocation } from 'wouter';
 import { useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Lock, FileText, Calendar, MessageSquareQuote, Music2, BookOpen } from 'lucide-react';
+import { FileText, Calendar, MessageSquareQuote, Music2, BookOpen, Flag } from 'lucide-react';
 
 export default function AdminIndex() {
   const { isAdmin } = useAppContext();
@@ -25,6 +25,7 @@ export default function AdminIndex() {
     { href: '/admin/devotions', label: 'Manage Devotionals', icon: FileText, desc: 'Create and delete daily readings' },
     { href: '/admin/events', label: 'Manage Events', icon: Calendar, desc: 'Schedule new youth gatherings' },
     { href: '/admin/questions', label: 'Answer Questions', icon: MessageSquareQuote, desc: 'Respond to anonymous user questions' },
+    { href: '/admin/chat-reports', label: 'Chat reports', icon: Flag, desc: 'Review reports submitted on chat messages' },
     { href: '/admin/music', label: 'Manage Music', icon: Music2, desc: 'Upload worship music and audio files' },
     { href: '/admin/study-guides', label: 'Study Guides', icon: BookOpen, desc: 'Create reading plans and verse guides' },
   ];

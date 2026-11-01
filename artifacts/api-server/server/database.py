@@ -105,7 +105,7 @@ def _oracle_ddl(ddl: str) -> str:
     )
     ddl = re.sub(r"\bTEXT\b", "VARCHAR2(4000)", ddl)
     ddl = re.sub(
-        r"\b(scripture_text|body|summary|content|answer)\s+VARCHAR2\(4000\)",
+        r"\b(scripture_text|body|summary|content|message_content|answer)\s+VARCHAR2\(4000\)",
         r"\1 CLOB",
         ddl,
         flags=re.IGNORECASE,
@@ -337,6 +337,33 @@ def create_tables():
         display_name TEXT NOT NULL,
         content TEXT NOT NULL,
         reply_to_id INTEGER,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS chat_message_stars (
+        message_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        PRIMARY KEY (message_id, user_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS chat_message_pins (
+        message_id INTEGER NOT NULL,
+        pinned_by INTEGER NOT NULL,
+        visibility VARCHAR(20) NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        PRIMARY KEY (message_id, pinned_by)
+    );
+
+    CREATE TABLE IF NOT EXISTS chat_message_reports (
+        id SERIAL PRIMARY KEY,
+        message_id INTEGER NOT NULL,
+        reported_by INTEGER NOT NULL,
+        room TEXT NOT NULL,
+        message_content TEXT NOT NULL,
+        message_author_id INTEGER NOT NULL,
+        reason TEXT NOT NULL,
+        status VARCHAR(20) DEFAULT 'open' NOT NULL,
         created_at TIMESTAMP DEFAULT NOW() NOT NULL
     );
 
