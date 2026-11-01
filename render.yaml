@@ -8,18 +8,16 @@ services:
     healthCheckPath: /api/healthz
     envVars:
       - key: DATABASE_URL
-        value: oracle://
-      - key: ORACLE_USER
-        sync: false
-      - key: ORACLE_PASSWORD
-        sync: false
-      - key: ORACLE_DSN
-        sync: false
-      - key: ORACLE_WALLET_LOCATION
-        value: /etc/secrets
-      - key: ORACLE_WALLET_PASSWORD
-        sync: false
+        fromDatabase:
+          name: youtht-connect-db
+          property: connectionString
       - key: ADMIN_PASSWORD
         sync: false
       - key: SESSION_SECRET
         generateValue: true
+
+databases:
+  - name: youtht-connect-db
+    databaseName: youth_connect
+    user: youth_connect
+    plan: free
