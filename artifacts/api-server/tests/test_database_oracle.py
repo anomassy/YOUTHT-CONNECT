@@ -2,17 +2,20 @@ import os
 import sys
 import unittest
 from decimal import Decimal
+from io import BytesIO
 from pathlib import Path
+from urllib.error import HTTPError
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-with patch.dict(os.environ, {"DATABASE_URL": "oracle://"}):
+with patch.dict(os.environ, {"DATABASE_URL": "oracle://", "AUTH_PROVIDER": "clerk"}):
     from server.database import (
         OracleCursor,
         _oracle_bind_values,
         _oracle_ddl,
         _oracle_sql,
     )
+    from server.routes.reading_plans import _openai_http_error
 
 
 class FakeVariable:
@@ -113,6 +116,41 @@ class OracleDatabaseTests(unittest.TestCase):
         )
         self.assertEqual(parameters["p0"], "reader")
         self.assertIsInstance(parameters["inserted_id"], FakeVariable)
+
+    def test_openai_auth_error_is_actionable_without_echoing_credentials(self):
+        error = HTTPError(
+            "https://api.openai.com/v1/chat/completions",
+            401,
+            "Unauthorized",
+            {},
+            BytesIO(b'{"error":{"message":"Incorrect API key provided","code":"invalid_api_key"}}'),
+        )
+        detail, code = _openai_http_error(error)
+        self.assertIn("OPENAI_API_KEY", detail)
+        self.assertEqual(code, "invalid_api_key")
+        self.assertNotIn("Incorrect API key", detail)
+
+    def test_openai_quota_and_model_errors_are_specific(self):
+        quota_error = HTTPError(
+            "https://api.openai.com/v1/chat/completions",
+            429,
+            "Too Many Requests",
+            {},
+            BytesIO(b'{"error":{"message":"No quota","code":"insufficient_quota"}}'),
+        )
+        quota_detail, quota_code = _openai_http_error(quota_error)
+        self.assertIn("billing and usage", quota_detail)
+        self.assertEqual(quota_code, "insufficient_quota")
+
+        model_error = HTTPError(
+            "https://api.openai.com/v1/chat/completions",
+            404,
+            "Not Found",
+            {},
+            BytesIO(b'{"error":{"message":"Model not found"}}'),
+        )
+        model_detail, _ = _openai_http_error(model_error)
+        self.assertIn("OPENAI_MODEL", model_detail)
 
 
 if __name__ == "__main__":

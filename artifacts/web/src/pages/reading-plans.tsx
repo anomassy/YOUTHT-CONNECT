@@ -27,6 +27,7 @@ export default function ReadingPlans() {
   const [dailyReading, setDailyReading] = useState<DailyReading | null>(null);
   const [dailyLoading, setDailyLoading] = useState(true);
   const [dailyError, setDailyError] = useState('');
+  const [summaryRetry, setSummaryRetry] = useState(0);
   const { data: plansData, isLoading: plansLoading } = useListReadingPlans();
   const { data: progressData, isLoading: progressLoading } = useGetReadingProgress();
   const completeDay = useCompleteReadingDay();
@@ -70,7 +71,7 @@ export default function ReadingPlans() {
     };
     void loadDailyReading();
     return () => { active = false; };
-  }, [getToken, token]);
+  }, [getToken, token, summaryRetry]);
 
   const plans = plansData?.plans || [];
   const completedDayIds = new Set(progressData?.progress?.filter(p => p.completed).map(p => p.planDayId) || []);
@@ -141,9 +142,26 @@ export default function ReadingPlans() {
               {dailyReading.summary ? (
                 <p className="text-sm leading-6">{dailyReading.summary}</p>
               ) : (
-                <p role={dailyError ? 'alert' : undefined} className={dailyError ? 'text-sm text-destructive' : 'text-sm text-muted-foreground'}>
-                  {dailyError || 'The chapter summary is not available yet.'}
-                </p>
+                <div>
+                  <p role={dailyError ? 'alert' : undefined} className={dailyError ? 'text-sm text-destructive' : 'text-sm text-muted-foreground'}>
+                    {dailyError || 'The chapter summary is not available yet.'}
+                  </p>
+                  {dailyError && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="mt-3"
+                      onClick={() => {
+                        setDailyError('');
+                        setDailyLoading(true);
+                        setSummaryRetry((retry) => retry + 1);
+                      }}
+                    >
+                      Try summary again
+                    </Button>
+                  )}
+                </div>
               )}
               <Button
                 onClick={handleDailyComplete}

@@ -5,6 +5,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 
 import { AuthProvider } from './context/AuthContext';
 import { AppProvider } from './context/AppContext';
+import { SettingsProvider } from './context/SettingsContext';
 import { AdminGuard, AuthGuard } from './components/auth-guard';
 import { Layout } from './components/layout';
 
@@ -21,6 +22,7 @@ import ReadingPlans from './pages/reading-plans';
 import Events from './pages/events';
 import Profile from './pages/profile';
 import More from './pages/more';
+import Settings from './pages/settings';
 
 import AdminIndex from './pages/admin/index';
 import AdminDevotions from './pages/admin/devotions';
@@ -44,6 +46,7 @@ function AuthenticatedApp() {
           <Route path="/reading-plans" component={ReadingPlans} />
           <Route path="/events" component={Events} />
           <Route path="/profile" component={Profile} />
+          <Route path="/settings" component={Settings} />
           <Route path="/more" component={More} />
           
           <Route path="/admin"><AdminGuard><AdminIndex /></AdminGuard></Route>
@@ -76,12 +79,14 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <AuthProvider>
-          <AppProvider>
-            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
-              <Router />
-            </WouterRouter>
-            <Toaster />
-          </AppProvider>
+          <SettingsProvider>
+            <AppProvider>
+              <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
+                <Router />
+              </WouterRouter>
+              <Toaster />
+            </AppProvider>
+          </SettingsProvider>
         </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>

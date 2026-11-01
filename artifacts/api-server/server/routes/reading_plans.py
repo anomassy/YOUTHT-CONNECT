@@ -214,6 +214,38 @@ def _get_chapter_text(passage: str) -> str:
     return text.strip()
 
 
+def _openai_http_error(exc: HTTPError) -> tuple[str, str | None]:
+    try:
+        payload = json.loads(exc.read(16_384).decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError, OSError):
+        payload = {}
+
+    error = payload.get("error", {}) if isinstance(payload, dict) else {}
+    if not isinstance(error, dict):
+        error = {}
+    code = error.get("code")
+    provider_message = error.get("message")
+    if not isinstance(code, str):
+        code = None
+
+    if exc.code == 401:
+        detail = "The AI provider rejected its API key. Update OPENAI_API_KEY in the deployment secrets."
+    elif exc.code == 429 and code == "insufficient_quota":
+        detail = "The AI provider account has no remaining API quota. Check billing and usage for its API project."
+    elif exc.code == 429:
+        detail = "The AI provider rate limit was reached. Wait briefly and try again."
+    elif exc.code == 403:
+        detail = "The AI provider denied this request. Check the API project permissions and model access."
+    elif exc.code == 404:
+        detail = "The configured AI model was not found or is unavailable to this API project. Check OPENAI_MODEL."
+    elif isinstance(provider_message, str) and provider_message.strip():
+        detail = f"The AI provider rejected the request: {provider_message.strip()[:400]}"
+    else:
+        detail = f"The AI provider rejected the request (HTTP {exc.code}). Check the API configuration and try again."
+
+    return detail, code
+
+
 @router.post("/reading-plans/daily-summary")
 def generate_daily_summary(user_id: int = Depends(require_auth)):
     reading = _todays_reading(user_id)
@@ -266,8 +298,13 @@ def generate_daily_summary(user_id: int = Depends(require_auth)):
         with urlopen(request, timeout=30) as response:
             result = json.loads(response.read().decode("utf-8"))
     except HTTPError as exc:
-        logger.exception("OpenAI returned HTTP %s while generating a reading summary.", exc.code)
-        raise HTTPException(502, "The AI summary service rejected the request.") from exc
+        detail, provider_code = _openai_http_error(exc)
+        logger.error(
+            "OpenAI rejected the reading summary request: HTTP %s, code=%s.",
+            exc.code,
+            provider_code,
+        )
+        raise HTTPException(502, detail) from exc
     except (URLError, TimeoutError) as exc:
         logger.exception("Could not connect to OpenAI to generate a reading summary.")
         raise HTTPException(502, "Could not connect to the AI summary service.") from exc

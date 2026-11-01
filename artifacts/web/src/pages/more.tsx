@@ -1,5 +1,5 @@
 import { Link } from 'wouter';
-import { Music, BookOpen, Calendar, User } from 'lucide-react';
+import { Music, BookOpen, Calendar, User, Settings } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 
 export default function More() {
@@ -8,6 +8,7 @@ export default function More() {
     { href: '/reading-plans', label: 'Reading Plans', icon: BookOpen, color: 'text-orange-500', desc: 'Bible study tracks' },
     { href: '/events', label: 'Events', icon: Calendar, color: 'text-blue-500', desc: 'Upcoming youth gatherings' },
     { href: '/profile', label: 'My Profile', icon: User, color: 'text-green-500', desc: 'Manage your account' },
+    { href: '/settings', label: 'Settings', icon: Settings, color: 'text-slate-500', desc: 'Personalize your experience' },
   ];
 
   return (
