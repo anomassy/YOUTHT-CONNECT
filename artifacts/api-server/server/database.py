@@ -238,6 +238,12 @@ def update_returning(cur, table: str, statement: str, params: tuple, row_id: int
 
 def create_tables():
     """Ensure all application tables exist without removing existing data."""
+    storage_backend = os.environ.get("STORAGE_BACKEND", "replit").strip().lower()
+    if storage_backend not in {"local", "replit", "postgres"}:
+        raise RuntimeError("STORAGE_BACKEND must be local, replit, or postgres.")
+    if storage_backend == "postgres" and not IS_POSTGRES:
+        raise RuntimeError("PostgreSQL object storage requires a PostgreSQL DATABASE_URL.")
+
     ddl = """
     CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -353,6 +359,15 @@ def create_tables():
         created_at TIMESTAMP DEFAULT NOW() NOT NULL
     );
     """
+    if storage_backend == "postgres":
+        ddl += """
+        CREATE TABLE IF NOT EXISTS stored_objects (
+            object_id VARCHAR(255) PRIMARY KEY,
+            content_type TEXT NOT NULL,
+            file_data BYTEA NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW() NOT NULL
+        );
+        """
     if IS_ORACLE:
         ddl = _oracle_ddl(ddl)
     elif IS_MYSQL:

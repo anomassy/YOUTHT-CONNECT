@@ -1,23 +1,30 @@
 import mimetypes
 import os
+import re
 import tempfile
+from pathlib import Path
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi import Request
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import FileResponse, RedirectResponse, Response
 from pydantic import BaseModel
 
 from ..auth import require_auth, require_admin
 from ..database import db_cursor, insert_returning
 from ..storage import (
     MAX_AUDIO_SIZE,
+    ALLOWED_AUDIO_EXTENSIONS,
+    delete_database_object,
     delete_local_audio,
+    get_database_object,
     get_audio_url,
     local_audio_directory,
     local_audio_file,
     local_audio_path,
     request_audio_upload,
+    save_database_object,
     save_local_audio,
+    uses_database_object_storage,
     uses_local_audio_storage,
 )
 
@@ -82,8 +89,11 @@ def delete_music(track_id: int, user_id: int = Depends(require_admin)):
         cur.execute("SELECT audio_path FROM music_tracks WHERE id = %s", (track_id,))
         row = cur.fetchone()
         cur.execute("DELETE FROM music_tracks WHERE id = %s", (track_id,))
-    if row and uses_local_audio_storage():
-        delete_local_audio(row["audio_path"])
+    if row:
+        if uses_database_object_storage():
+            delete_database_object(row["audio_path"])
+        elif uses_local_audio_storage():
+            delete_local_audio(row["audio_path"])
 
 
 @router.post("/storage/uploads/request-url")
@@ -135,6 +145,51 @@ async def upload_local_audio(
     return {"uploaded": True}
 
 
+@router.put("/storage/database-uploads/{object_id}", status_code=201)
+async def upload_database_object(object_id: str, request: Request):
+    if not uses_database_object_storage():
+        raise HTTPException(404, "Database object storage is disabled.")
+
+    filename = Path(object_id)
+    try:
+        UUID(filename.stem)
+    except ValueError as exc:
+        raise HTTPException(404, "Upload not found.") from exc
+    if filename.name != object_id:
+        raise HTTPException(404, "Upload not found.")
+
+    content_type = request.headers.get("content-type", "").split(";", 1)[0].lower()
+    if content_type.startswith("audio/"):
+        max_size = MAX_AUDIO_SIZE
+        if filename.suffix.lower() not in ALLOWED_AUDIO_EXTENSIONS | {".audio"}:
+            raise HTTPException(415, "Unsupported audio file type.")
+    elif content_type in {"image/jpeg", "image/png", "image/webp"}:
+        max_size = 10 * 1024 * 1024
+        if filename.suffix:
+            raise HTTPException(415, "Invalid profile photo upload path.")
+    else:
+        raise HTTPException(415, "Only supported audio and image files can be uploaded.")
+
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > max_size:
+                raise HTTPException(413, "Uploaded file exceeds the allowed size.")
+        except ValueError as exc:
+            raise HTTPException(400, "Invalid Content-Length header.") from exc
+
+    content = bytearray()
+    async for chunk in request.stream():
+        content.extend(chunk)
+        if len(content) > max_size:
+            raise HTTPException(413, "Uploaded file exceeds the allowed size.")
+    if not content:
+        raise HTTPException(400, "The uploaded file is empty.")
+
+    save_database_object(object_id, content_type, bytes(content))
+    return {"uploaded": True}
+
+
 @router.get("/storage/local-objects/{object_id}")
 def serve_local_audio(object_id: str):
     if not uses_local_audio_storage():
@@ -145,5 +200,56 @@ def serve_local_audio(object_id: str):
 
 
 @router.get("/storage/objects/{object_path:path}")
-def serve_storage_object(object_path: str):
+def serve_storage_object(object_path: str, request: Request):
+    if uses_database_object_storage():
+        normalized = object_path.strip("/")
+        if not normalized.startswith("uploads/") or ".." in normalized:
+            raise HTTPException(404, "Stored file not found.")
+        object_id = normalized.removeprefix("uploads/")
+        content, content_type = get_database_object(object_id)
+        return _database_object_response(content, content_type, request.headers.get("range"))
     return RedirectResponse(get_audio_url(object_path), status_code=307)
+
+
+def _database_object_response(
+    content: bytes, content_type: str, range_header: str | None
+):
+    headers = {
+        "Accept-Ranges": "bytes",
+        "Cache-Control": "private, max-age=3600",
+        "X-Content-Type-Options": "nosniff",
+    }
+    if not range_header:
+        return Response(content, media_type=content_type, headers=headers)
+
+    match = re.fullmatch(r"bytes=(\d*)-(\d*)", range_header.strip())
+    if not match or not any(match.groups()):
+        return Response(
+            status_code=416,
+            headers={**headers, "Content-Range": f"bytes */{len(content)}"},
+        )
+
+    start_text, end_text = match.groups()
+    total = len(content)
+    if start_text:
+        start = int(start_text)
+        end = int(end_text) if end_text else total - 1
+    else:
+        suffix_length = int(end_text)
+        start = max(total - suffix_length, 0)
+        end = total - 1
+
+    if start >= total or end < start:
+        return Response(
+            status_code=416,
+            headers={**headers, "Content-Range": f"bytes */{total}"},
+        )
+
+    end = min(end, total - 1)
+    headers["Content-Range"] = f"bytes {start}-{end}/{total}"
+    return Response(
+        content[start : end + 1],
+        status_code=206,
+        media_type=content_type,
+        headers=headers,
+    )

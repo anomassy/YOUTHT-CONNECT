@@ -14,6 +14,8 @@ services:
         fromDatabase:
           name: youtht-connect-db
           property: connectionString
+      - key: STORAGE_BACKEND
+        value: postgres
       - key: ADMIN_PASSWORD
         sync: true
       - key: SESSION_SECRET

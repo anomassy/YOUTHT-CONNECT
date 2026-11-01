@@ -29,9 +29,16 @@ ALLOWED_AUDIO_EXTENSIONS = {
 
 def uses_local_audio_storage() -> bool:
     backend = os.environ.get("STORAGE_BACKEND", "replit").strip().lower()
-    if backend not in {"local", "replit"}:
-        raise RuntimeError("STORAGE_BACKEND must be either local or replit.")
+    if backend not in {"local", "replit", "postgres"}:
+        raise RuntimeError("STORAGE_BACKEND must be local, replit, or postgres.")
     return backend == "local"
+
+
+def uses_database_object_storage() -> bool:
+    backend = os.environ.get("STORAGE_BACKEND", "replit").strip().lower()
+    if backend not in {"local", "replit", "postgres"}:
+        raise RuntimeError("STORAGE_BACKEND must be local, replit, or postgres.")
+    return backend == "postgres"
 
 
 def local_audio_directory() -> Path:
@@ -115,6 +122,11 @@ def request_audio_upload(name: str, size: int, content_type: str) -> dict:
 
     object_id = f"{uuid4()}{_audio_extension(name, content_type)}"
     object_path = f"/objects/uploads/{object_id}"
+    if uses_database_object_storage():
+        return {
+            "uploadURL": f"/api/storage/database-uploads/{object_id}",
+            "objectPath": object_path,
+        }
     if uses_local_audio_storage():
         return {
             "uploadURL": f"/api/storage/local-uploads/{object_id}",
@@ -167,8 +179,13 @@ def request_profile_photo_upload(name: str, size: int, content_type: str) -> dic
     if content_type.lower() not in {"image/jpeg", "image/png", "image/webp"}:
         raise HTTPException(400, "Profile photos must be JPG, PNG, or WebP images.")
 
-    bucket_name, private_prefix = _storage_location()
     object_id = str(uuid4())
+    if uses_database_object_storage():
+        return {
+            "uploadURL": f"/api/storage/database-uploads/{object_id}",
+            "objectPath": f"/objects/uploads/{object_id}",
+        }
+    bucket_name, private_prefix = _storage_location()
     object_name = f"{private_prefix}/uploads/{object_id}"
     return {
         "uploadURL": _sign_object_url(bucket_name, object_name, "PUT", 900),
@@ -181,6 +198,8 @@ def get_audio_url(object_path: str) -> str:
     if not normalized.startswith("uploads/") or ".." in normalized:
         raise HTTPException(404, "Audio file not found.")
     object_id = normalized.removeprefix("uploads/")
+    if uses_database_object_storage():
+        return f"/api/storage/objects/{normalized}"
     if uses_local_audio_storage():
         local_audio_file(object_id)
         return f"/api/storage/local-objects/{object_id}"
@@ -189,3 +208,44 @@ def get_audio_url(object_path: str) -> str:
     return _sign_object_url(
         bucket_name, f"{private_prefix}/{normalized}", "GET", 3600
     )
+
+
+def save_database_object(object_id: str, content_type: str, content: bytes) -> None:
+    from .database import db_cursor
+
+    with db_cursor(commit=True) as cur:
+        cur.execute(
+            """INSERT INTO stored_objects (object_id, content_type, file_data)
+               VALUES (%s, %s, %s)
+               ON CONFLICT (object_id) DO NOTHING""",
+            (object_id, content_type, content),
+        )
+        if cur.rowcount == 0:
+            raise HTTPException(409, "This upload has already been used.")
+
+
+def get_database_object(object_id: str) -> tuple[bytes, str]:
+    from .database import db_cursor
+
+    with db_cursor() as cur:
+        cur.execute(
+            "SELECT content_type, file_data FROM stored_objects WHERE object_id = %s",
+            (object_id,),
+        )
+        row = cur.fetchone()
+    if not row:
+        raise HTTPException(404, "Stored file not found.")
+    return bytes(row["file_data"]), row["content_type"]
+
+
+def delete_database_object(object_path: str) -> None:
+    from .database import db_cursor
+
+    normalized = object_path.strip("/")
+    if normalized.startswith("objects/"):
+        normalized = normalized.removeprefix("objects/")
+    if not normalized.startswith("uploads/") or ".." in normalized:
+        return
+    object_id = normalized.removeprefix("uploads/")
+    with db_cursor(commit=True) as cur:
+        cur.execute("DELETE FROM stored_objects WHERE object_id = %s", (object_id,))

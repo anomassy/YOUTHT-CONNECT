@@ -2,11 +2,13 @@
 
 Youth Connect runs as a Render web service with a Render-managed PostgreSQL database. The repository's `render.yaml` Blueprint defines both resources and connects them through the database's internal connection string. The application and database run on Render; Clerk and OpenAI remain external services used for sign-in and AI summaries.
 
+On Render, music uploads and profile photos are stored in the PostgreSQL database as binary objects (`BYTEA`), controlled by `STORAGE_BACKEND=postgres`. The object table is created automatically at API startup. This avoids the unavailable Replit object-storage service and requires no separate storage URL.
+
 ## 1. Deploy the app and database to Render
 
 1. Push this repository to GitHub.
 2. In Render, create a **Blueprint** and select this repository. Render reads `render.yaml` and creates:
-   - The `youtht-connect` web service, built from `Dockerfile`.
+   - The `YOUTHT-CONNECT` web service, built from `Dockerfile`.
    - The `youtht-connect-db` PostgreSQL database.
 3. Review the Blueprint resources and approve creation. The web service's `DATABASE_URL` is linked to the database's private connection string; do not enter a separate database URL.
 4. Provide a strong `ADMIN_PASSWORD` when prompted, or set it under the web service's **Environment** settings. This variable must be set on the web service (not the PostgreSQL resource). Render generates `SESSION_SECRET` automatically; keep it stable.
@@ -14,6 +16,12 @@ Youth Connect runs as a Render web service with a Render-managed PostgreSQL data
 6. Visit `https://youtht-connect.onrender.com/api/healthz` and confirm the health check succeeds, then open `https://youtht-connect.onrender.com`.
 
 The configured database is a **new, empty database**. The app creates its schema automatically, but no old Oracle data is copied.
+
+## Database file-storage limits
+
+The PostgreSQL database stores uploaded audio files (up to 100 MB each) and profile photos (up to 10 MB each) alongside app data. Large uploads consume database capacity quickly and increase backup/restore times. The Render free database has limited storage and expires after 30 days, so this setup is suitable for testing only. Monitor database usage in Render and do not upload large libraries to the free database. Upgrade to persistent paid storage before relying on uploaded content.
+
+The Blueprint sets `STORAGE_BACKEND=postgres` on the web service. Keep that value when deploying to Render; do not use `local` (ephemeral across deploys) or `replit` (requires the Replit storage sidecar). If storage was previously configured as `replit`, redeploy this Blueprint so the new setting takes effect. Previously uploaded Replit files are not copied automatically.
 
 ## 2. Free database limitations
 
@@ -56,6 +64,7 @@ Add the Clerk and OpenAI variables above to the Render web service's environment
 
 - **Database connection or startup failure:** Confirm both Blueprint resources are available and the web service's `DATABASE_URL` is linked to `youtht-connect-db` using its internal connection string. Review the web service logs.
 - **Database tables missing:** Review startup logs for a schema setup error. The API initializes tables on service startup.
+- **Music or photo upload reports object storage is not configured:** Confirm the web service has `STORAGE_BACKEND=postgres`, `DATABASE_URL` is linked to the Render database, and the latest deployment has started successfully. The API creates the `stored_objects` table during startup.
 - **Clerk sign-in fails:** Check the production publishable key, issuer, JWKS URL, and that `CLERK_ALLOWED_ORIGINS` exactly matches the token's authorized-party origin.
 - **AI summaries unavailable:** Check `OPENAI_API_KEY`, the selected `OPENAI_MODEL`, and the OpenAI project's quota and model permissions.
 - **Database nearing expiration:** Back up or migrate the free database to a paid Render PostgreSQL database before its expiration date.

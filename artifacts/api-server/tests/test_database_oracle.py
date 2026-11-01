@@ -15,9 +15,12 @@ with patch.dict(os.environ, {"DATABASE_URL": "oracle://", "AUTH_PROVIDER": "cler
         _oracle_bind_values,
         _oracle_ddl,
         _oracle_sql,
+        create_tables,
     )
+    from server.routes.music import _database_object_response
     from server.routes.auth import AdminLoginRequest, admin_login
     from server.routes.reading_plans import _openai_http_error
+    from server.storage import request_audio_upload, request_profile_photo_upload
 
 
 class FakeVariable:
@@ -59,6 +62,40 @@ class FakeLob:
 
 
 class OracleDatabaseTests(unittest.TestCase):
+    def test_postgres_storage_returns_database_upload_urls_for_audio_and_photos(self):
+        with patch.dict(os.environ, {"STORAGE_BACKEND": "postgres"}):
+            audio = request_audio_upload("song.mp3", 100, "audio/mpeg")
+            photo = request_profile_photo_upload("photo.png", 100, "image/png")
+
+        self.assertIn("/api/storage/database-uploads/", audio["uploadURL"])
+        self.assertTrue(audio["objectPath"].startswith("/objects/uploads/"))
+        self.assertIn("/api/storage/database-uploads/", photo["uploadURL"])
+        self.assertTrue(photo["objectPath"].startswith("/objects/uploads/"))
+
+    def test_postgres_storage_initializes_binary_object_table(self):
+        cursor = unittest.mock.Mock()
+        db_context = unittest.mock.MagicMock()
+        db_context.__enter__.return_value = cursor
+        with (
+            patch("server.database.db_cursor", return_value=db_context),
+            patch("server.database.IS_ORACLE", False),
+            patch("server.database.IS_MYSQL", False),
+            patch("server.database.IS_POSTGRES", True),
+            patch.dict(os.environ, {"STORAGE_BACKEND": "postgres"}),
+        ):
+            create_tables()
+
+        statements = "\n".join(call.args[0] for call in cursor.execute.call_args_list)
+        self.assertIn("CREATE TABLE IF NOT EXISTS stored_objects", statements)
+        self.assertIn("file_data BYTEA NOT NULL", statements)
+
+    def test_postgres_object_responses_support_audio_byte_ranges(self):
+        response = _database_object_response(b"0123456789", "audio/mpeg", "bytes=3-6")
+
+        self.assertEqual(response.status_code, 206)
+        self.assertEqual(response.body, b"3456")
+        self.assertEqual(response.headers["content-range"], "bytes 3-6/10")
+
     def test_admin_login_explains_render_configuration_when_password_missing(self):
         with patch.dict(os.environ, {"ADMIN_PASSWORD": ""}):
             with self.assertRaises(HTTPException) as error:
