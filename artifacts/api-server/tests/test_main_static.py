@@ -13,11 +13,20 @@ with patch.dict(
 ):
     from fastapi import HTTPException
     from fastapi.responses import FileResponse
-    from server.main import web_fallback, web_root
+    from server.main import app, web_fallback, web_root
     from server.routes.health import health_check
 
 
 class StaticFrontendTests(unittest.TestCase):
+    def test_quarterly_routes_are_registered_on_the_api_app(self):
+        paths = app.openapi()["paths"]
+        self.assertIn("/api/reading-plans/quarterly", paths)
+
+    def test_ai_routes_are_not_registered_on_the_api_app(self):
+        paths = app.openapi()["paths"]
+        self.assertNotIn("/api/reading-plans/daily-summary", paths)
+        self.assertNotIn("/api/chat/messages/{message_id}/ask-ai", paths)
+
     def test_root_and_client_routes_return_the_built_frontend(self):
         with tempfile.TemporaryDirectory() as temp_directory:
             web_root_path = Path(temp_directory)

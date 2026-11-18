@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 export default function More() {
   const links = [
     { href: '/music', label: 'Worship Music', icon: Music, color: 'text-purple-500', desc: 'Listen to classic hymns' },
-    { href: '/reading-plans', label: 'Reading Plans', icon: BookOpen, color: 'text-orange-500', desc: 'Bible study tracks' },
+    { href: '/reading-plans', label: 'Sabbath School Lessons', icon: BookOpen, color: 'text-orange-500', desc: 'Seventh-day Adventist quarterly study' },
     { href: '/events', label: 'Events', icon: Calendar, color: 'text-blue-500', desc: 'Upcoming youth gatherings' },
     { href: '/profile', label: 'My Profile', icon: User, color: 'text-green-500', desc: 'Manage your account' },
     { href: '/settings', label: 'Settings', icon: Settings, color: 'text-slate-500', desc: 'Personalize your experience' },

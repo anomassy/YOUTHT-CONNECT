@@ -12,7 +12,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { CheckSquare, Copy, Flag, Forward, Heart, Info, MessageSquareQuote, Pin, Reply, Send, Sparkles, Star, Trash2, User as UserIcon, UserCircle, Users, X } from 'lucide-react';
+import { CheckSquare, Copy, Flag, Forward, Heart, Info, MessageSquareQuote, Pin, Reply, Send, Star, Trash2, User as UserIcon, UserCircle, Users } from 'lucide-react';
 import { formatDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -175,7 +175,6 @@ function ChatRoom({
   const [actionsMessageId, setActionsMessageId] = useState<number | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedMessageIds, setSelectedMessageIds] = useState<number[]>([]);
-  const [aiAnswer, setAiAnswer] = useState('');
   const [loadError, setLoadError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -330,20 +329,6 @@ function ChatRoom({
     }
   };
 
-  const askAiAboutMessage = async (msg: ChatMessage) => {
-    if (!window.confirm('This message will be sent to OpenAI to generate an explanation. Continue?')) return;
-    try {
-      const result = await requestMessageAction(msg.id, 'ask-ai');
-      setAiAnswer(result.answer);
-    } catch (error) {
-      toast({
-        title: 'Could not ask AI',
-        description: error instanceof Error ? error.message : 'Please try again.',
-        variant: 'destructive',
-      });
-    }
-  };
-
   const deleteMessages = async (messageIds: number[]) => {
     const ownedIds = messageIds.filter((id) => messages.some((item) => item.id === id && item.userId === userId));
     if (!ownedIds.length) {
@@ -416,17 +401,6 @@ function ChatRoom({
   return (
     <Card className="flex-1 flex flex-col h-full rounded-none border-x-0 md:rounded-xl md:border-x shadow-none md:shadow-sm overflow-hidden bg-card">
       <div className="flex-1 overflow-y-auto p-4 space-y-4" ref={scrollRef}>
-        {aiAnswer && (
-          <div role="status" className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
-            <div className="mb-1 flex items-center justify-between gap-2">
-              <p className="font-medium">AI explanation</p>
-              <Button type="button" variant="ghost" size="icon" className="h-7 w-7" aria-label="Dismiss AI explanation" onClick={() => setAiAnswer('')}>
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-            <p className="whitespace-pre-wrap">{aiAnswer}</p>
-          </div>
-        )}
         {isLoading ? (
           <div className="flex justify-center p-4 text-muted-foreground"><div className="animate-spin w-5 h-5 border-2 border-primary border-t-transparent rounded-full"/></div>
         ) : loadError ? (
@@ -522,7 +496,6 @@ function ChatRoom({
                         </DropdownMenuSubContent>
                       </DropdownMenuSub>
                       {msg.isPinnedByMe && <DropdownMenuItem onSelect={() => void unpinMessage(msg)}><Pin /> Unpin</DropdownMenuItem>}
-                      <DropdownMenuItem onSelect={() => void askAiAboutMessage(msg)}><Sparkles /> Ask AI</DropdownMenuItem>
                       <DropdownMenuItem onSelect={() => void toggleStar(msg)}>
                         {msg.isStarred ? <Heart className="fill-current" /> : <Star />}
                         {msg.isStarred ? 'Remove star' : 'Star privately'}

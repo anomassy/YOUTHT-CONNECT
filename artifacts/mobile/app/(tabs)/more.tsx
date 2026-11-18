@@ -24,7 +24,7 @@ export default function MoreScreen() {
   const bottomPad = insets.bottom + (Platform.OS === 'web' ? 84 : 0);
 
   const items = [
-    { icon: 'book', label: 'Bible Reading Plans', sub: 'Follow along day by day', route: '/reading-plans', color: '#0EA5E9', bg: '#E0F2FE' },
+    { icon: 'book', label: 'Sabbath School Lessons', sub: 'Seventh-day Adventist quarterly study', route: '/reading-plans', color: '#0EA5E9', bg: '#E0F2FE' },
     { icon: 'calendar', label: 'Events', sub: 'Upcoming services & gatherings', route: '/events', color: '#059669', bg: '#DCFCE7' },
     { icon: 'music', label: 'Gospel Music', sub: 'Worship anywhere', route: '/(tabs)/music', color: '#7C3AED', bg: '#EDE9FE' },
     { icon: 'user', label: 'Profile', sub: 'Your account & settings', route: '/profile', color: colors.primary as string, bg: colors.secondary as string },

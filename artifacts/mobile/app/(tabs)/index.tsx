@@ -118,8 +118,8 @@ export default function HomeScreen() {
           />
           <QuickCard
             icon="book"
-            label="Reading Plans"
-            sub="Bible in a plan"
+            label="Sabbath School"
+            sub="Quarterly lessons"
             color={'#0EA5E9'}
             onPress={() => router.push('/reading-plans')}
             colors={colors}

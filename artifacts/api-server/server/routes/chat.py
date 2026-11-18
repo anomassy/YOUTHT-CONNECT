@@ -1,19 +1,11 @@
-import json
-import logging
-import os
 import random
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
 
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 
 from ..database import db_cursor, insert_returning, update_returning
 from ..auth import require_auth, require_admin
-from .reading_plans import _openai_http_error
-
 router = APIRouter()
-logger = logging.getLogger(__name__)
 
 VALID_ROOMS = {"friends", "anonymous"}
 
@@ -381,70 +373,6 @@ def update_chat_report(
         if cur.rowcount == 0:
             raise HTTPException(404, "Open report not found.")
     return {"id": report_id, "status": body.status}
-
-
-@router.post("/chat/messages/{message_id}/ask-ai")
-def ask_ai_about_chat_message(
-    message_id: int,
-    user_id: int = Depends(require_auth),
-):
-    with db_cursor() as cur:
-        message = _get_message_for_user(cur, message_id, user_id)
-
-    message_content = message["content"]
-    if len(message_content) > 10000:
-        raise HTTPException(413, "AI assistance is limited to messages of 10000 characters or fewer.")
-
-    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
-    if not api_key:
-        raise HTTPException(503, "AI assistance is not configured. Set OPENAI_API_KEY in the Render web service environment.")
-    request_body = {
-        "model": os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
-        "messages": [
-            {
-                "role": "system",
-                "content": (
-                    "Explain the chat message in clear, concise language. "
-                    "Do not infer personal details or invent context."
-                ),
-            },
-            {"role": "user", "content": message_content},
-        ],
-        "temperature": 0.2,
-    }
-    request = Request(
-        "https://api.openai.com/v1/chat/completions",
-        data=json.dumps(request_body).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
-    try:
-        with urlopen(request, timeout=30) as response:
-            result = json.loads(response.read().decode("utf-8"))
-        answer = result["choices"][0]["message"]["content"].strip()
-    except HTTPError as exc:
-        detail, provider_code = _openai_http_error(exc)
-        logger.error("OpenAI rejected a chat message explanation: HTTP %s, code=%s.", exc.code, provider_code)
-        raise HTTPException(502, detail) from exc
-    except (URLError, TimeoutError) as exc:
-        logger.exception("Could not connect to OpenAI to explain a chat message.")
-        raise HTTPException(502, "Could not connect to the AI assistance service.") from exc
-    except (
-        json.JSONDecodeError,
-        UnicodeDecodeError,
-        KeyError,
-        IndexError,
-        TypeError,
-        AttributeError,
-    ) as exc:
-        logger.exception("OpenAI returned an invalid chat message explanation.")
-        raise HTTPException(502, "The AI assistance service returned an invalid response.") from exc
-    if not answer:
-        raise HTTPException(502, "The AI assistance service returned an empty response.")
-    return {"answer": answer}
 
 
 @router.delete("/chat/messages/{message_id}", status_code=204)

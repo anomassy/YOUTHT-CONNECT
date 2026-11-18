@@ -1,6 +1,6 @@
 # Render Deployment
 
-Youth Connect runs as a Render web service with a Render-managed PostgreSQL database. The repository's `render.yaml` Blueprint defines both resources and connects them through the database's internal connection string. The application and database run on Render; Clerk and OpenAI remain external services used for sign-in and AI summaries.
+Youth Connect runs as a Render web service with a Render-managed PostgreSQL database. The repository's `render.yaml` Blueprint defines both resources and connects them through the database's internal connection string. The application and database run on Render, with Clerk used for sign-in.
 
 On Render, music uploads and profile photos are stored in the PostgreSQL database as binary objects (`BYTEA`), controlled by `STORAGE_BACKEND=postgres`. The object table is created automatically at API startup. This avoids the unavailable Replit object-storage service and requires no separate storage URL.
 
@@ -41,14 +41,9 @@ Render's free web service may spin down while idle. This affects startup latency
 
 Use the production Clerk instance's values, not development-instance values. Never put a Clerk secret key in a `VITE_` variable or in frontend code. The app's server-side Clerk token verification uses the issuer and JWKS URL rather than a Clerk secret key.
 
-## 4. Connect OpenAI summaries
+## 4. Sabbath School Quarterly
 
-1. Create an OpenAI API key in the OpenAI platform for the project you intend to use. Keep the key private.
-2. Add `OPENAI_API_KEY` to the Render web service's environment variables. Treat it as a secret; do not use a `VITE_` prefix, put it in frontend configuration, or commit it to the repository.
-3. Optionally set `OPENAI_MODEL` to a model available to that API project. If omitted, the application defaults to `gpt-4o-mini`.
-4. Save the settings and redeploy or restart the Render web service. Open the reading page and confirm the daily chapter summary appears. The API reports actionable configuration errors if the key, quota, permissions, or model is not accepted. Without `OPENAI_API_KEY`, daily readings remain available but AI summaries are not generated.
-
-Monitor usage and set suitable usage limits in the OpenAI project. The application caches generated summaries per chapter, but API usage may still incur charges.
+The app lists the current Seventh-day Adventist Adult Sabbath School Bible Study Guide quarter and its weekly lesson schedule. The schedule includes lesson titles, dates, and page references; use an authorized quarterly edition for the full lesson text.
 
 ## 5. Render configuration details
 
@@ -58,7 +53,7 @@ Monitor usage and set suitable usage limits in the OpenAI project. The applicati
 - **Health check:** `/api/healthz`
 - **Database setup:** runs automatically when the API starts; setup errors are reported in Render logs
 
-Add the Clerk and OpenAI variables above to the Render web service's environment settings; they are intentionally not database credentials and do not belong on the PostgreSQL resource. For any changed `VITE_` variable, trigger a new deploy so the frontend bundle is rebuilt. After changing server-only variables, restart or redeploy the web service.
+Add the Clerk variables above to the Render web service's environment settings; they are intentionally not database credentials and do not belong on the PostgreSQL resource. For any changed `VITE_` variable, trigger a new deploy so the frontend bundle is rebuilt. After changing server-only variables, restart or redeploy the web service.
 
 ## Troubleshooting
 
@@ -66,6 +61,5 @@ Add the Clerk and OpenAI variables above to the Render web service's environment
 - **Database tables missing:** Review startup logs for a schema setup error. The API initializes tables on service startup.
 - **Music or photo upload reports object storage is not configured:** Confirm the web service has `STORAGE_BACKEND=postgres`, `DATABASE_URL` is linked to the Render database, and the latest deployment has started successfully. The API creates the `stored_objects` table during startup.
 - **Clerk sign-in fails:** Check the production publishable key, issuer, JWKS URL, and that `CLERK_ALLOWED_ORIGINS` exactly matches the token's authorized-party origin.
-- **AI summaries unavailable:** Check `OPENAI_API_KEY`, the selected `OPENAI_MODEL`, and the OpenAI project's quota and model permissions.
 - **Database nearing expiration:** Back up or migrate the free database to a paid Render PostgreSQL database before its expiration date.
 - **Admin login says the password is not configured:** In Render, open the deployed `YOUTHT-CONNECT` web service (not the Blueprint page or PostgreSQL resource), go to **Environment**, and add `ADMIN_PASSWORD` with a non-empty value. Save the change and wait for the service to redeploy or manually restart it. Then retry the admin login. Changing the variable locally or on the database resource does not change the running web service's environment.

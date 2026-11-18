@@ -82,7 +82,7 @@ export default function Home() {
               { href: '/prayer', label: 'Prayer Wall', icon: Users, color: 'text-blue-500', bg: 'bg-blue-500/10' },
               { href: '/community', label: 'Chat', icon: MessageSquare, color: 'text-green-500', bg: 'bg-green-500/10' },
               { href: '/music', label: 'Worship', icon: Music, color: 'text-purple-500', bg: 'bg-purple-500/10' },
-              { href: '/reading-plans', label: 'Bible Plans', icon: BookOpen, color: 'text-orange-500', bg: 'bg-orange-500/10' },
+              { href: '/reading-plans', label: 'Sabbath School', icon: BookOpen, color: 'text-orange-500', bg: 'bg-orange-500/10' },
             ].map((action) => (
               <Link key={action.label} href={action.href}>
                 <Card className="hover-elevate cursor-pointer text-center py-6 h-full transition-colors hover:border-primary/30">

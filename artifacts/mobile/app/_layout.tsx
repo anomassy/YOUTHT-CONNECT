@@ -44,7 +44,7 @@ function RootLayoutNav() {
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="profile" options={{ headerShown: false, presentation: 'modal' }} />
-      <Stack.Screen name="reading-plans" options={{ title: 'Bible Reading Plans' }} />
+      <Stack.Screen name="reading-plans" options={{ title: 'Sabbath School Lessons' }} />
       <Stack.Screen name="events" options={{ title: 'Events' }} />
       <Stack.Screen name="admin" options={{ headerShown: false }} />
     </Stack>
