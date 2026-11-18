@@ -1,6 +1,7 @@
 import { Link } from 'wouter';
 import { Music, BookOpen, Calendar, User, Settings } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { InstallAppCard } from '@/components/install-app';
 
 export default function More() {
   const links = [
@@ -14,6 +15,7 @@ export default function More() {
   return (
     <div className="p-4 md:p-8 max-w-3xl mx-auto space-y-6">
       <h1 className="text-3xl font-serif text-primary mb-6">More</h1>
+      <InstallAppCard />
       
       <div className="grid gap-4 md:grid-cols-2">
         {links.map((link) => (
