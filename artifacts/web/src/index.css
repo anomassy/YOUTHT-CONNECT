@@ -281,17 +281,6 @@
     transition-duration: 0.01ms !important;
   }
 
-  @media (max-width: 767px) {
-    html[data-mobile-navigation='compact'] .mobile-nav-label {
-      display: none;
-    }
-
-    html[data-mobile-navigation='compact'] .mobile-nav-icon {
-      width: 1.4rem;
-      height: 1.4rem;
-    }
-  }
-
   @layer components {
     .player-menu-item {
       @apply flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
@@ -300,18 +289,6 @@
     .player-menu-item svg {
       @apply size-4 shrink-0;
     }
-  }
-
-  [data-density='compact'] .settings-page {
-    --settings-section-gap: 1rem;
-  }
-
-  [data-density='compact'] .settings-page > * + * {
-    margin-top: var(--settings-section-gap);
-  }
-
-  [data-density='compact'] main > div {
-    padding: 1rem;
   }
 
   body {

@@ -8,6 +8,7 @@ import { AppProvider } from './context/AppContext';
 import { SettingsProvider } from './context/SettingsContext';
 import { AdminGuard, AuthGuard } from './components/auth-guard';
 import { Layout } from './components/layout';
+import { AdminLayout } from './components/admin-layout';
 
 import NotFound from '@/pages/not-found';
 import Login from './pages/login';
@@ -49,19 +50,19 @@ function AuthenticatedApp() {
           <Route path="/profile" component={Profile} />
           <Route path="/settings" component={Settings} />
           <Route path="/more" component={More} />
-          
-          <Route path="/admin"><AdminGuard><AdminIndex /></AdminGuard></Route>
-          <Route path="/admin/devotions"><AdminGuard><AdminDevotions /></AdminGuard></Route>
-          <Route path="/admin/events"><AdminGuard><AdminEvents /></AdminGuard></Route>
-          <Route path="/admin/questions"><AdminGuard><AdminQuestions /></AdminGuard></Route>
-          <Route path="/admin/music"><AdminGuard><AdminMusic /></AdminGuard></Route>
-          <Route path="/admin/study-guides"><AdminGuard><AdminStudyGuides /></AdminGuard></Route>
-          <Route path="/admin/chat-reports"><AdminGuard><AdminChatReports /></AdminGuard></Route>
-          
+
           <Route component={NotFound} />
         </Switch>
       </Layout>
     </AuthGuard>
+  );
+}
+
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  return (
+    <AdminGuard>
+      <AdminLayout>{children}</AdminLayout>
+    </AdminGuard>
   );
 }
 
@@ -71,6 +72,13 @@ function Router() {
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
       <Route path="/admin-login" component={AdminLogin} />
+      <Route path="/admin"><AdminRoute><AdminIndex /></AdminRoute></Route>
+      <Route path="/admin/devotions"><AdminRoute><AdminDevotions /></AdminRoute></Route>
+      <Route path="/admin/events"><AdminRoute><AdminEvents /></AdminRoute></Route>
+      <Route path="/admin/questions"><AdminRoute><AdminQuestions /></AdminRoute></Route>
+      <Route path="/admin/music"><AdminRoute><AdminMusic /></AdminRoute></Route>
+      <Route path="/admin/study-guides"><AdminRoute><AdminStudyGuides /></AdminRoute></Route>
+      <Route path="/admin/chat-reports"><AdminRoute><AdminChatReports /></AdminRoute></Route>
       <Route component={AuthenticatedApp} />
     </Switch>
   );

@@ -2,7 +2,6 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
 export type ThemePreference = 'system' | 'light' | 'dark';
 export type NavigationLayout = 'expanded' | 'compact';
-export type ContentDensity = 'comfortable' | 'compact';
 export type FontScale = 'small' | 'standard' | 'large';
 export type AccentColor =
   | 'navy'
@@ -15,17 +14,14 @@ export type AccentColor =
   | 'plum'
   | 'gold';
 export type MusicLayout = 'split' | 'player-first';
-export type MobileNavigation = 'standard' | 'compact';
 export type ContrastPreference = 'standard' | 'high';
 
 interface AppearanceSettings {
   theme: ThemePreference;
   navigationLayout: NavigationLayout;
-  contentDensity: ContentDensity;
   fontScale: FontScale;
   accentColor: AccentColor;
   musicLayout: MusicLayout;
-  mobileNavigation: MobileNavigation;
   highContrast: boolean;
   reduceMotion: boolean;
   autoplayNext: boolean;
@@ -41,11 +37,9 @@ const STORAGE_KEY = 'yc_appearance_settings';
 const DEFAULT_SETTINGS: AppearanceSettings = {
   theme: 'system',
   navigationLayout: 'expanded',
-  contentDensity: 'comfortable',
   fontScale: 'standard',
   accentColor: 'navy',
   musicLayout: 'split',
-  mobileNavigation: 'standard',
   highContrast: false,
   reduceMotion: false,
   autoplayNext: true,
@@ -73,11 +67,9 @@ function readSettings(): AppearanceSettings {
     return {
       theme: parsed.theme === 'light' || parsed.theme === 'dark' ? parsed.theme : 'system',
       navigationLayout: parsed.navigationLayout === 'compact' ? 'compact' : 'expanded',
-      contentDensity: parsed.contentDensity === 'compact' ? 'compact' : 'comfortable',
       fontScale: parsed.fontScale === 'small' || parsed.fontScale === 'large' ? parsed.fontScale : 'standard',
       accentColor: parsed.accentColor && parsed.accentColor in ACCENT_COLORS ? parsed.accentColor : 'navy',
       musicLayout: parsed.musicLayout === 'player-first' ? 'player-first' : 'split',
-      mobileNavigation: parsed.mobileNavigation === 'compact' ? 'compact' : 'standard',
       highContrast: parsed.highContrast === true,
       reduceMotion: parsed.reduceMotion === true,
       autoplayNext: parsed.autoplayNext !== false,
@@ -109,8 +101,6 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     };
     applyTheme();
     root.dataset.navigation = settings.navigationLayout;
-    root.dataset.mobileNavigation = settings.mobileNavigation;
-    root.dataset.density = settings.contentDensity;
     root.dataset.contrast = settings.highContrast ? 'high' : 'standard';
     root.dataset.reduceMotion = String(settings.reduceMotion);
     root.style.fontSize = settings.fontScale === 'small' ? '14px' : settings.fontScale === 'large' ? '18px' : '';

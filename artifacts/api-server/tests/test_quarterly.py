@@ -16,8 +16,10 @@ with patch.dict(os.environ, {"DATABASE_URL": "oracle://", "AUTH_PROVIDER": "cler
     from server.auth import clerk_identity
     from server.quarterly import CURRENT_QUARTERLY
     from server.routes.reading_plans import (
+        CreateQuarterlyRequest,
         CreateReadingPlanRequest,
         complete_reading_day,
+        create_quarterly,
         create_reading_plan,
         get_quarterly_reading,
     )
@@ -35,15 +37,28 @@ class QuarterlyTests(unittest.TestCase):
         self.assertEqual(CURRENT_QUARTERLY["lessons"][0]["title"], "The Creator Speaks")
         self.assertEqual(CURRENT_QUARTERLY["lessons"][-1]["page"], 163)
 
-    def test_quarterly_endpoint_returns_schedule_without_lesson_text(self):
+    @patch("server.routes.reading_plans.db_cursor")
+    def test_quarterly_endpoint_returns_schedule_without_lesson_text(self, db_cursor):
+        cursor = db_cursor.return_value.__enter__.return_value
+        cursor.fetchall.return_value = []
         response = get_quarterly_reading(user_id=1)
 
         self.assertEqual(response["quarterly"]["quarter"], "Q4 2026")
         self.assertEqual(len(response["quarterly"]["lessons"]), 13)
+        self.assertEqual(response["quarterlies"], [])
         self.assertEqual(
             set(response["quarterly"]["lessons"][0]),
             {"week", "title", "dateRange", "page"},
         )
+
+    def test_create_quarterly_rejects_missing_required_fields(self):
+        with self.assertRaises(HTTPException) as error:
+            create_quarterly(
+                CreateQuarterlyRequest(title=" ", publication="Guide", quarter="Q1 2027"),
+                user_id=1,
+            )
+
+        self.assertEqual(error.exception.status_code, 400)
 
     def test_create_reading_plan_rejects_duplicate_day_numbers(self):
         with self.assertRaises(HTTPException) as error:

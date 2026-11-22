@@ -4,10 +4,11 @@ import { formatTime } from '@/lib/format';
 import {
   Play, Pause, SkipBack, SkipForward, Music, Shuffle, Repeat, Repeat1,
   ThumbsUp, ThumbsDown, MoreVertical, ListMusic, Bookmark, Download,
-  Share2, ListPlus, PlayCircle, X, Heart,
+  Share2, ListPlus, PlayCircle, X, Heart, Search, Headphones,
 } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { useSettings } from '@/context/SettingsContext';
 import { cn } from '@/lib/utils';
@@ -73,6 +74,7 @@ function TrackActions({ track }: { track: GospelTrack }) {
 
 export default function MusicPage() {
   const [libraryView, setLibraryView] = useState<'all' | 'liked' | 'saved'>('all');
+  const [search, setSearch] = useState('');
   const { musicLayout } = useSettings();
   const { 
     tracks, 
@@ -100,18 +102,35 @@ export default function MusicPage() {
     libraryView === 'all'
     || (libraryView === 'liked' && likedTrackIds.includes(track.id))
     || (libraryView === 'saved' && savedTrackIds.includes(track.id))
-  ));
+  )).filter((track) => {
+    const query = search.trim().toLocaleLowerCase();
+    return !query
+      || track.title.toLocaleLowerCase().includes(query)
+      || track.artist.toLocaleLowerCase().includes(query);
+  });
 
   return (
-    <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-8 animate-in fade-in duration-300">
-      <div className="text-center space-y-2 mb-8">
-        <h1 className="text-3xl font-serif text-primary">Worship</h1>
-        <p className="text-muted-foreground">Sing to the Lord a new song.</p>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6 md:px-8 md:py-10">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-primary">Songs for every moment</p>
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight sm:text-4xl">Worship</h1>
+          <p className="mt-2 text-muted-foreground">Listen, save your favorites, and keep the music close.</p>
+        </div>
+        <div className="flex items-center gap-2 rounded-full border bg-card px-3 py-2 text-sm text-muted-foreground">
+          <Headphones className="size-4 text-primary" aria-hidden="true" />
+          {tracks.length} {tracks.length === 1 ? 'song' : 'songs'}
+        </div>
+      </header>
+
+      {playbackError && (
+        <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+          {playbackError}
+        </p>
+      )}
 
       <div className={cn('grid gap-8', musicLayout === 'split' && 'md:grid-cols-2')}>
-        {/* Player Column */}
-        <div className="flex flex-col items-center p-6 bg-card border rounded-3xl shadow-sm">
+        <section aria-label="Music player" className="flex flex-col items-center rounded-3xl border bg-card p-5 shadow-sm sm:p-7">
           <div className="mb-4 flex w-full items-center justify-between">
             <Button
               type="button"
@@ -127,9 +146,12 @@ export default function MusicPage() {
             <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Now playing</span>
             {currentTrack ? <TrackActions track={currentTrack} /> : <span className="size-9" />}
           </div>
-          <div className="w-full aspect-square max-w-[280px] bg-gradient-to-br from-primary/20 to-secondary/20 rounded-2xl mb-8 flex items-center justify-center shadow-inner relative overflow-hidden">
-            <div className={cn("absolute inset-0 bg-primary/5 transition-opacity duration-1000", isPlaying ? "opacity-100" : "opacity-0")} />
-            <Music className="w-24 h-24 text-primary/40" />
+          <div className="relative mb-7 flex aspect-square w-full max-w-[320px] items-center justify-center overflow-hidden rounded-3xl bg-gradient-to-br from-primary via-primary/90 to-secondary shadow-lg">
+            <div className="absolute -right-10 -top-10 size-48 rounded-full border-[24px] border-primary-foreground/10" />
+            <div className="absolute -bottom-16 -left-12 size-56 rounded-full border border-secondary/50" />
+            <div className={cn('absolute inset-0 bg-black/10 transition-opacity duration-700', isPlaying ? 'opacity-0' : 'opacity-40')} />
+            <Music className="relative size-24 text-primary-foreground/85" aria-hidden="true" />
+            {isPlaying && <span className="absolute bottom-4 left-4 rounded-full bg-background/20 px-3 py-1 text-xs font-medium text-primary-foreground backdrop-blur">Now playing</span>}
           </div>
           
           <div className="w-full text-center mb-6">
@@ -139,7 +161,6 @@ export default function MusicPage() {
             <p className="text-muted-foreground text-sm mt-1 truncate">
               {currentTrack?.artist || '...'}
             </p>
-            {playbackError && <p className="text-sm text-destructive mt-3">{playbackError}</p>}
           </div>
 
           <div className="w-full space-y-3 mb-8">
@@ -222,15 +243,27 @@ export default function MusicPage() {
               {repeatMode === 'one' ? <Repeat1 /> : <Repeat />}
             </Button>
           </div>
-        </div>
+        </section>
 
-        {/* Playlist Column */}
-        <div className="bg-card border rounded-3xl p-2 md:p-4 h-full flex flex-col">
-          <div className="flex items-center justify-between border-b px-4 py-3">
-            <h3 className="font-semibold text-lg">Hymns & Favorites</h3>
-            <span className="text-xs text-muted-foreground">{queuedTrackIds.length} queued</span>
+        <section aria-label="Worship music library" className="flex h-full flex-col rounded-3xl border bg-card p-3 shadow-sm sm:p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b px-2 pb-4 pt-2">
+            <div>
+              <h2 className="font-semibold text-lg">Your library</h2>
+              <p className="mt-1 text-xs text-muted-foreground">{queuedTrackIds.length} in your queue</p>
+            </div>
+            <div className="relative w-full sm:max-w-56">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+              <Input
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Find a song"
+                aria-label="Search worship music"
+                className="h-9 pl-9"
+              />
+            </div>
           </div>
-          <div className="flex gap-2 overflow-x-auto border-b px-3 py-2" role="group" aria-label="Music library filter">
+          <div className="flex gap-2 overflow-x-auto border-b px-1 py-3" role="group" aria-label="Music library filter">
             {([
               { key: 'all', label: 'All songs', icon: ListMusic },
               { key: 'liked', label: 'Liked', icon: Heart },
@@ -249,7 +282,7 @@ export default function MusicPage() {
               </Button>
             ))}
           </div>
-          <div className="overflow-y-auto flex-1 py-2">
+          <div className="min-h-72 flex-1 overflow-y-auto py-2">
             {queuedTrackIds.length > 0 && (
               <div className="border-b pb-2 mb-2">
                 <p className="px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Up next</p>
@@ -276,15 +309,20 @@ export default function MusicPage() {
               </div>
             )}
             {visibleTracks.length === 0 && (
-              <p className="px-4 py-8 text-sm text-muted-foreground text-center">
+              <div className="flex flex-col items-center px-4 py-12 text-center">
+                <Music className="size-9 text-muted-foreground/60" aria-hidden="true" />
+                <p className="mt-3 text-sm text-muted-foreground">
                 {tracks.length === 0
                   ? 'Worship music is being prepared. Check back soon.'
+                  : search
+                    ? 'No songs match your search.'
                   : libraryView === 'liked'
                     ? 'Songs you like will appear here.'
                     : libraryView === 'saved'
                       ? 'Songs saved to your library will appear here.'
                       : 'No songs match this filter.'}
-              </p>
+                </p>
+              </div>
             )}
             {visibleTracks.map((track, idx) => {
               const isCurrent = currentTrack?.id === track.id;
@@ -329,7 +367,7 @@ export default function MusicPage() {
               );
             })}
           </div>
-        </div>
+        </section>
       </div>
     </div>
   );

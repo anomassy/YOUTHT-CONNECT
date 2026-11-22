@@ -8,6 +8,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
+import { CalendarDays, MapPin } from 'lucide-react';
 import { formatDate } from '@/lib/format';
 import { useToast } from '@/hooks/use-toast';
 
@@ -21,7 +22,7 @@ const schema = z.object({
 export default function AdminEvents() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { data } = useListEvents();
+  const { data, isLoading, isError, error } = useListEvents();
   const create = useCreateEvent();
 
   const form = useForm<z.infer<typeof schema>>({
@@ -32,35 +33,43 @@ export default function AdminEvents() {
   });
 
   const onSubmit = (values: z.infer<typeof schema>) => {
-    // Convert local datetime to ISO string for backend
-    const isoDate = new Date(values.startsAt).toISOString();
+    const date = new Date(values.startsAt);
+    if (Number.isNaN(date.getTime())) {
+      toast({ title: 'Invalid date', description: 'Choose a valid event date and time.', variant: 'destructive' });
+      return;
+    }
     
-    create.mutate({ data: { ...values, startsAt: isoDate } }, {
+    create.mutate({ data: { ...values, startsAt: date.toISOString() } }, {
       onSuccess: () => {
         form.reset();
         queryClient.invalidateQueries({ queryKey: getListEventsQueryKey() });
         toast({ description: "Event created." });
-      }
+      },
+      onError: () => toast({ title: 'Could not create event', description: 'Please try again.', variant: 'destructive' }),
     });
   };
 
   return (
-    <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-8">
-      <h1 className="text-2xl font-bold">Manage Events</h1>
+    <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 md:px-8 md:py-10">
+      <header>
+        <p className="text-sm font-semibold text-primary">Content management</p>
+        <h1 className="mt-1 text-3xl font-semibold tracking-tight">Manage events</h1>
+        <p className="mt-2 text-muted-foreground">Schedule a gathering and keep the community informed.</p>
+      </header>
 
       <Card>
         <CardHeader>
-          <CardTitle>Create Event</CardTitle>
+          <CardTitle>Create an event</CardTitle>
         </CardHeader>
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <div className="grid md:grid-cols-2 gap-4">
+              <div className="grid gap-4 md:grid-cols-2">
                 <FormField control={form.control} name="title" render={({ field }) => (
                   <FormItem><FormLabel>Title</FormLabel><FormControl><Input {...field}/></FormControl><FormMessage/></FormItem>
                 )}/>
                 <FormField control={form.control} name="startsAt" render={({ field }) => (
-                  <FormItem><FormLabel>Start Date & Time</FormLabel><FormControl><Input type="datetime-local" {...field}/></FormControl><FormMessage/></FormItem>
+                  <FormItem><FormLabel>Start date & time</FormLabel><FormControl><Input type="datetime-local" {...field}/></FormControl><FormMessage/></FormItem>
                 )}/>
               </div>
               <FormField control={form.control} name="location" render={({ field }) => (
@@ -69,25 +78,42 @@ export default function AdminEvents() {
               <FormField control={form.control} name="description" render={({ field }) => (
                   <FormItem><FormLabel>Description</FormLabel><FormControl><Textarea {...field}/></FormControl><FormMessage/></FormItem>
               )}/>
-              <Button type="submit" disabled={create.isPending}>Create Event</Button>
+              <Button type="submit" disabled={create.isPending}>{create.isPending ? 'Creating…' : 'Create event'}</Button>
             </form>
           </Form>
         </CardContent>
       </Card>
 
       <div className="space-y-4">
-        <h2 className="text-xl font-bold mt-8">Scheduled Events</h2>
-        <div className="grid md:grid-cols-2 gap-4">
-          {data?.events?.map(e => (
-            <Card key={e.id}>
-              <CardContent className="p-4">
-                <p className="font-bold">{e.title}</p>
-                <p className="text-sm text-muted-foreground">{formatDate(e.startsAt)}</p>
-                <p className="text-sm mt-2">{e.location}</p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <h2 className="text-xl font-semibold">Scheduled events</h2>
+        {isLoading ? (
+          <div className="grid gap-4 md:grid-cols-2">{[0, 1].map((item) => <Card key={item} className="h-24 animate-pulse bg-muted" />)}</div>
+        ) : isError ? (
+          <p role="alert" className="text-sm text-destructive">{error instanceof Error ? error.message : 'Could not load events.'}</p>
+        ) : data?.events?.length ? (
+          <div className="grid gap-4 md:grid-cols-2">
+            {data.events.map((event) => (
+              <Card key={event.id} className="rounded-2xl">
+                <CardContent className="flex items-start gap-3 p-4">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                    <CalendarDays className="size-5" aria-hidden="true" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="font-semibold">{event.title}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">{formatDate(event.startsAt)}</p>
+                    {event.location && (
+                      <p className="mt-2 flex items-center gap-1.5 text-sm text-muted-foreground">
+                        <MapPin className="size-3.5" aria-hidden="true" /> {event.location}
+                      </p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <p className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">No events scheduled.</p>
+        )}
       </div>
     </div>
   );

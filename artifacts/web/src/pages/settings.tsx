@@ -11,11 +11,9 @@ import {
   PanelLeft,
   Music2,
   Columns2,
-  Smartphone,
   ShieldCheck,
   LockKeyhole,
   UserRound,
-  Sparkles,
 } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -30,11 +28,9 @@ import { useAuth } from "@/context/AuthContext";
 import {
   useSettings,
   type AccentColor,
-  type ContentDensity,
   type FontScale,
   type NavigationLayout,
   type MusicLayout,
-  type MobileNavigation,
   type ThemePreference,
 } from "@/context/SettingsContext";
 import { cn } from "@/lib/utils";
@@ -147,11 +143,9 @@ export default function SettingsPage() {
   const {
     theme,
     navigationLayout,
-    contentDensity,
     musicLayout,
     fontScale,
     accentColor,
-    mobileNavigation,
     highContrast,
     reduceMotion,
     autoplayNext,
@@ -186,7 +180,7 @@ export default function SettingsPage() {
             <Accessibility className="size-4" /> Accessibility
           </TabsTrigger>
           <TabsTrigger value="system" className="gap-2 py-2">
-            <Sparkles className="size-4" /> System
+            <Music2 className="size-4" /> Playback
           </TabsTrigger>
           <TabsTrigger value="privacy" className="gap-2 py-2">
             <ShieldCheck className="size-4" /> Privacy
@@ -262,7 +256,7 @@ export default function SettingsPage() {
               <div className="flex justify-end border-t pt-5">
                 <Button type="button" variant="outline" onClick={resetSettings}>
                   <RotateCcw aria-hidden="true" />
-                  Reset to defaults
+                  Reset all preferences
                 </Button>
               </div>
             </CardContent>
@@ -276,7 +270,7 @@ export default function SettingsPage() {
                 <LayoutDashboard className="size-5 text-primary" /> Layout
               </CardTitle>
               <CardDescription>
-                Adjust navigation, spacing, and the music player arrangement.
+                Adjust desktop navigation and the music player arrangement.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -300,18 +294,6 @@ export default function SettingsPage() {
                 }
               />
               <ChoiceGroup
-                label="Content spacing"
-                value={contentDensity}
-                options={[
-                  {
-                    value: "comfortable" as ContentDensity,
-                    label: "Comfortable",
-                  },
-                  { value: "compact" as ContentDensity, label: "Compact" },
-                ]}
-                onChange={(value) => updateSettings({ contentDensity: value })}
-              />
-              <ChoiceGroup
                 label="Music player layout"
                 value={musicLayout}
                 options={[
@@ -328,31 +310,6 @@ export default function SettingsPage() {
                 ]}
                 onChange={(value) => updateSettings({ musicLayout: value })}
               />
-              <div className="border-t pt-5">
-                <h3 className="mb-1 flex items-center gap-2 text-sm font-medium">
-                  <Smartphone className="size-4" /> Phone navigation
-                </h3>
-                <p className="mb-3 text-sm text-muted-foreground">
-                  Choose how the mobile bottom navigation is displayed.
-                </p>
-                <ChoiceGroup
-                  label="Mobile navigation"
-                  value={mobileNavigation}
-                  options={[
-                    {
-                      value: "standard" as MobileNavigation,
-                      label: "Icons + labels",
-                    },
-                    {
-                      value: "compact" as MobileNavigation,
-                      label: "Compact icons",
-                    },
-                  ]}
-                  onChange={(value) =>
-                    updateSettings({ mobileNavigation: value })
-                  }
-                />
-              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -392,7 +349,7 @@ export default function SettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Sparkles className="size-5 text-primary" /> System
+                <Music2 className="size-5 text-primary" /> Playback
               </CardTitle>
               <CardDescription>
                 Control how playback behaves on this device.

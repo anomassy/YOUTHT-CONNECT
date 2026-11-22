@@ -1,7 +1,7 @@
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ..bible_plan import (
     DAILY_BIBLE_PLAN_TITLE,
@@ -27,6 +27,24 @@ class CreateReadingPlanRequest(BaseModel):
     title: str
     description: str = ""
     days: list[ReadingPlanDayInput]
+
+class QuarterlyDayInput(BaseModel):
+    week: int = Field(ge=1, le=13)
+    day: int = Field(ge=1, le=7)
+    title: str
+    scriptureRef: str = ""
+    content: str
+
+
+class CreateQuarterlyRequest(BaseModel):
+    title: str
+    publication: str
+    quarter: str
+    summary: str = ""
+
+
+class SaveQuarterlyDayRequest(QuarterlyDayInput):
+    pass
 
 
 def ensure_daily_bible_plan():
@@ -155,8 +173,189 @@ def get_daily_reading(user_id: int = Depends(require_auth)):
 
 
 @router.get("/reading-plans/quarterly")
-def get_quarterly_reading(user_id: int = Depends(require_auth)):
-    return {"quarterly": CURRENT_QUARTERLY}
+def get_quarterly_reading(
+    user_id: int = Depends(require_auth),
+    edition_id: int | None = None,
+):
+    with db_cursor() as cur:
+        cur.execute(
+            """SELECT id, title, publication, quarter, summary, is_current, created_at
+               FROM quarterly_editions
+               ORDER BY is_current DESC, created_at DESC"""
+        )
+        editions = [dict(row) for row in cur.fetchall()]
+
+        if not editions:
+            return {"quarterly": CURRENT_QUARTERLY, "quarterlies": []}
+
+        edition = next((row for row in editions if row["id"] == edition_id), None)
+        if edition_id is not None and edition is None:
+            raise HTTPException(404, "Quarterly edition not found.")
+        if edition is None:
+            edition = next((row for row in editions if row["is_current"]), editions[0])
+
+        cur.execute(
+            """SELECT id, week_number, day_number, day_title, scripture_ref, content
+               FROM quarterly_lesson_days
+               WHERE edition_id = %s
+               ORDER BY week_number, day_number""",
+            (edition["id"],),
+        )
+        day_rows = [dict(row) for row in cur.fetchall()]
+
+    weeks: dict[int, dict] = {}
+    for row in day_rows:
+        week_number = row["week_number"]
+        week = weeks.setdefault(
+            week_number,
+            {
+                "week": week_number,
+                "title": f"Week {week_number}",
+                "dateRange": "",
+                "page": None,
+                "days": [],
+            },
+        )
+        week["days"].append({
+            "id": row["id"],
+            "day": row["day_number"],
+            "title": row["day_title"],
+            "scriptureRef": row["scripture_ref"],
+            "content": row["content"],
+        })
+
+    quarterly = {
+        "id": edition["id"],
+        "title": edition["title"],
+        "publication": edition["publication"],
+        "quarter": edition["quarter"],
+        "summary": edition["summary"],
+        "isCurrent": edition["is_current"],
+        "lessons": list(weeks.values()),
+    }
+    quarterlies = [
+        {
+            "id": row["id"],
+            "title": row["title"],
+            "publication": row["publication"],
+            "quarter": row["quarter"],
+            "summary": row["summary"],
+            "isCurrent": row["is_current"],
+        }
+        for row in editions
+    ]
+    return {"quarterly": quarterly, "quarterlies": quarterlies}
+
+
+@router.post("/reading-plans/quarterly", status_code=201)
+def create_quarterly(
+    body: CreateQuarterlyRequest,
+    user_id: int = Depends(require_admin),
+):
+    title = body.title.strip()
+    publication = body.publication.strip()
+    quarter = body.quarter.strip()
+    if not title or not publication or not quarter:
+        raise HTTPException(400, "Title, publication, and quarter are required.")
+
+    with db_cursor(commit=True) as cur:
+        cur.execute(
+            "SELECT id FROM quarterly_editions WHERE quarter = %s LIMIT 1",
+            (quarter,),
+        )
+        if cur.fetchone():
+            raise HTTPException(409, "A quarterly edition with this quarter already exists.")
+        cur.execute("UPDATE quarterly_editions SET is_current = %s", (False,))
+        row = dict(insert_returning(
+            cur,
+            "quarterly_editions",
+            """INSERT INTO quarterly_editions
+               (title, publication, quarter, summary, is_current)
+               VALUES (%s, %s, %s, %s, %s)""",
+            (title, publication, quarter, body.summary.strip(), True),
+        ))
+    return {"quarterly": {
+        "id": row["id"],
+        "title": row["title"],
+        "publication": row["publication"],
+        "quarter": row["quarter"],
+        "summary": row["summary"],
+        "isCurrent": row["is_current"],
+    }}
+
+
+@router.put("/reading-plans/quarterly/{edition_id}/days", status_code=200)
+def save_quarterly_day(
+    edition_id: int,
+    body: SaveQuarterlyDayRequest,
+    user_id: int = Depends(require_admin),
+):
+    title = body.title.strip()
+    content = body.content.strip()
+    if not title or not content:
+        raise HTTPException(400, "A day title and full lesson text are required.")
+
+    with db_cursor(commit=True) as cur:
+        cur.execute("SELECT id FROM quarterly_editions WHERE id = %s LIMIT 1", (edition_id,))
+        if cur.fetchone() is None:
+            raise HTTPException(404, "Quarterly edition not found.")
+        cur.execute(
+            """SELECT id FROM quarterly_lesson_days
+               WHERE edition_id = %s AND week_number = %s AND day_number = %s
+               LIMIT 1""",
+            (edition_id, body.week, body.day),
+        )
+        existing = cur.fetchone()
+        if existing:
+            cur.execute(
+                """UPDATE quarterly_lesson_days
+                   SET day_title = %s, scripture_ref = %s, content = %s
+                   WHERE id = %s""",
+                (title, body.scriptureRef.strip(), content, existing["id"]),
+            )
+            lesson_id = existing["id"]
+        else:
+            row = dict(insert_returning(
+                cur,
+                "quarterly_lesson_days",
+                """INSERT INTO quarterly_lesson_days
+                   (edition_id, week_number, day_number, day_title, scripture_ref, content)
+                   VALUES (%s, %s, %s, %s, %s, %s)""",
+                (
+                    edition_id,
+                    body.week,
+                    body.day,
+                    title,
+                    body.scriptureRef.strip(),
+                    content,
+                ),
+            ))
+            lesson_id = row["id"]
+    return {"day": {
+        "id": lesson_id,
+        "week": body.week,
+        "day": body.day,
+        "title": title,
+        "scriptureRef": body.scriptureRef.strip(),
+        "content": content,
+    }}
+
+
+@router.patch("/reading-plans/quarterly/{edition_id}/current")
+def set_current_quarterly(
+    edition_id: int,
+    user_id: int = Depends(require_admin),
+):
+    with db_cursor(commit=True) as cur:
+        cur.execute("SELECT id FROM quarterly_editions WHERE id = %s LIMIT 1", (edition_id,))
+        if cur.fetchone() is None:
+            raise HTTPException(404, "Quarterly edition not found.")
+        cur.execute("UPDATE quarterly_editions SET is_current = %s", (False,))
+        cur.execute(
+            "UPDATE quarterly_editions SET is_current = %s WHERE id = %s",
+            (True, edition_id),
+        )
+    return {"id": edition_id, "isCurrent": True}
 
 
 @router.post("/reading-plans", status_code=201)

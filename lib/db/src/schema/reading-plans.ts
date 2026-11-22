@@ -25,9 +25,32 @@ export const readingProgressTable = table("reading_progress", {
   completedAt: timestamp("completed_at").defaultNow().notNull(),
 });
 
+export const quarterlyEditionsTable = table("quarterly_editions", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  publication: text("publication").notNull(),
+  quarter: text("quarter").notNull(),
+  summary: text("summary").default(""),
+  isCurrent: boolean("is_current").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const quarterlyLessonDaysTable = table("quarterly_lesson_days", {
+  id: serial("id").primaryKey(),
+  editionId: integer("edition_id").notNull(),
+  weekNumber: integer("week_number").notNull(),
+  dayNumber: integer("day_number").notNull(),
+  dayTitle: text("day_title").notNull(),
+  scriptureRef: text("scripture_ref").default(""),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const insertReadingPlanSchema = createInsertSchema(readingPlansTable).omit({
   id: true,
   createdAt: true,
 });
 export type ReadingPlan = typeof readingPlansTable.$inferSelect;
 export type ReadingPlanDay = typeof readingPlanDaysTable.$inferSelect;
+export type QuarterlyEdition = typeof quarterlyEditionsTable.$inferSelect;
+export type QuarterlyLessonDay = typeof quarterlyLessonDaysTable.$inferSelect;

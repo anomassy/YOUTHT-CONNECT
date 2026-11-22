@@ -283,6 +283,28 @@ def create_tables():
         reflection TEXT DEFAULT ''
     );
 
+    CREATE TABLE IF NOT EXISTS quarterly_editions (
+        id SERIAL PRIMARY KEY,
+        title TEXT NOT NULL,
+        publication TEXT NOT NULL,
+        quarter VARCHAR(32) NOT NULL UNIQUE,
+        summary TEXT DEFAULT '',
+        is_current BOOLEAN NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS quarterly_lesson_days (
+        id SERIAL PRIMARY KEY,
+        edition_id INTEGER NOT NULL,
+        week_number INTEGER NOT NULL,
+        day_number INTEGER NOT NULL,
+        day_title TEXT NOT NULL,
+        scripture_ref TEXT DEFAULT '',
+        content TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        UNIQUE (edition_id, week_number, day_number)
+    );
+
     CREATE TABLE IF NOT EXISTS reading_progress (
         id SERIAL PRIMARY KEY,
         user_id INTEGER NOT NULL,
