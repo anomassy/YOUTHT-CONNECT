@@ -16,7 +16,9 @@
     "ios": {
       "supportsTablet": false
     },
-    "android": {},
+    "android": {
+      "package": "youthconnect.com"
+    },
     "web": {
       "favicon": "./assets/images/icon.png"
     },

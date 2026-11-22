@@ -18,6 +18,7 @@ if not JWT_SECRET and AUTH_PROVIDER == "local":
 
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_DAYS = 30
+CLERK_CLOCK_SKEW_LEEWAY_SECONDS = 60
 logger = logging.getLogger(__name__)
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -52,6 +53,7 @@ def clerk_identity(
             signing_key.key,
             algorithms=["RS256"],
             issuer=issuer,
+            leeway=CLERK_CLOCK_SKEW_LEEWAY_SECONDS,
             options={"verify_aud": False},
         )
     except (jwt.PyJWTError, jwt.PyJWKClientError) as exc:

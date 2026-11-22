@@ -8,13 +8,7 @@ import {
   View,
 } from 'react-native';
 import { useColors } from '@/hooks/useColors';
-import {
-  useListReadingPlans,
-  useGetReadingProgress,
-  useCompleteReadingDay,
-} from '@workspace/api-client-react';
 import { useAuth } from '@/context/AuthContext';
-import * as Haptics from 'expo-haptics';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -153,16 +147,11 @@ export default function ReadingPlansScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { token } = useAuth();
-  const { data: plansData, isLoading } = useListReadingPlans();
-  const { data: progressData, refetch: refetchProgress } = useGetReadingProgress();
-  const completeDay = useCompleteReadingDay();
-  const [expandedPlanId, setExpandedPlanId] = useState<number | null>(null);
+  const [expandedLessonWeek, setExpandedLessonWeek] = useState<number | null>(null);
   const [quarterly, setQuarterly] = useState<Quarterly | null>(null);
   const [quarterlyLoading, setQuarterlyLoading] = useState(true);
   const [quarterlyError, setQuarterlyError] = useState('');
 
-  const plans = plansData?.plans ?? [];
-  const completedDayIds = new Set((progressData?.progress ?? []).filter(p => p.completed).map(p => p.planDayId));
   const currentLesson = quarterly ? getCurrentQuarterLesson(quarterly.lessons) : null;
   const currentInsight = currentLesson ? lessonInsights[currentLesson.week] : null;
   const bottomPad = insets.bottom + (Platform.OS === 'web' ? 34 : 0);
@@ -193,13 +182,6 @@ export default function ReadingPlansScreen() {
     return () => { active = false; };
   }, [token]);
 
-  async function handleCompleteDay(dayId: number) {
-    if (completedDayIds.has(dayId)) return;
-    await completeDay.mutateAsync({ dayId });
-    await refetchProgress();
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }
-
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
@@ -219,7 +201,7 @@ export default function ReadingPlansScreen() {
         <Text style={[styles.quarterlyTitle, { color: colors.primary }]}>
           {quarterly?.title || 'The Gift of Prophecy'}
         </Text>
-        <Text style={[styles.planDesc, { color: colors.mutedForeground }]}>
+        <Text style={[styles.quarterlyDescription, { color: colors.mutedForeground }]}>
           {quarterly?.publication || 'Adult Sabbath School Bible Study Guide'}
           {quarterly?.summary ? ` · ${quarterly.summary}` : ''}
         </Text>
@@ -256,21 +238,64 @@ export default function ReadingPlansScreen() {
             ) : null}
             <View style={[styles.quarterlyLessons, { borderTopColor: colors.border }]}>
               {quarterly.lessons.map((lesson) => (
-                <View key={lesson.week} style={[styles.quarterlyLesson, { borderBottomColor: colors.border }]}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: expandedLessonWeek === lesson.week }}
+                  key={lesson.week}
+                  onPress={() => setExpandedLessonWeek((week) => week === lesson.week ? null : lesson.week)}
+                  style={[styles.quarterlyLesson, { borderBottomColor: colors.border }]}
+                >
                   <View style={[styles.weekNumber, { backgroundColor: colors.secondary }]}>
                     <Text style={[styles.weekNumberText, { color: colors.primary }]}>{lesson.week}</Text>
                   </View>
                   <View style={styles.lessonInfo}>
                     <Text style={[styles.lessonTitle, { color: colors.foreground }]}>{lesson.title}</Text>
                     <Text style={[styles.lessonDate, { color: colors.mutedForeground }]}>{lesson.dateRange}</Text>
+                    <Text style={[styles.lessonDate, { color: colors.primary }]}>
+                      {expandedLessonWeek === lesson.week ? 'Tap to close lesson details' : 'Tap to open lesson'}
+                    </Text>
                   </View>
                   <Text style={[styles.lessonPage, { color: colors.mutedForeground }]}>p. {lesson.page}</Text>
-                </View>
+                  <Feather
+                    name={expandedLessonWeek === lesson.week ? 'chevron-up' : 'chevron-down'}
+                    size={18}
+                    color={colors.mutedForeground}
+                  />
+                </Pressable>
               ))}
             </View>
-            <Text style={[styles.quarterlyNote, { color: colors.mutedForeground }]}>
-              Use your authorized quarterly edition for the full lesson text.
-            </Text>
+            {quarterly.lessons.filter((lesson) => lesson.week === expandedLessonWeek).map((lesson) => {
+              const insight = lessonInsights[lesson.week];
+              return (
+                <View key={lesson.week} style={[styles.lessonDetails, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+                  <Text style={[styles.currentLessonTitle, { color: colors.foreground }]}>
+                    Week {lesson.week}: {lesson.title}
+                  </Text>
+                  <Text style={[styles.currentLessonDate, { color: colors.mutedForeground }]}>
+                    {lesson.dateRange} · Page {lesson.page}
+                  </Text>
+                  {insight ? (
+                    <View style={styles.insightGrid}>
+                      <View style={[styles.insightCard, { backgroundColor: colors.card }]}>
+                        <Text style={[styles.insightLabel, { color: colors.mutedForeground }]}>Theme</Text>
+                        <Text style={[styles.insightText, { color: colors.foreground }]}>{insight.theme}</Text>
+                      </View>
+                      <View style={[styles.insightCard, { backgroundColor: colors.card }]}>
+                        <Text style={[styles.insightLabel, { color: colors.mutedForeground }]}>Study objective</Text>
+                        <Text style={[styles.insightText, { color: colors.foreground }]}>{insight.objective}</Text>
+                      </View>
+                      <View style={[styles.insightCard, { backgroundColor: colors.card }]}>
+                        <Text style={[styles.insightLabel, { color: colors.mutedForeground }]}>Reflect</Text>
+                        <Text style={[styles.insightText, { color: colors.foreground }]}>{insight.prompt}</Text>
+                      </View>
+                    </View>
+                  ) : null}
+                  <Text style={[styles.quarterlyNote, { color: colors.mutedForeground }]}>
+                    Use your authorized quarterly edition for the complete lesson text.
+                  </Text>
+                </View>
+              );
+            })}
           </>
         ) : (
           <Text style={[styles.quarterlyMessage, { color: colors.mutedForeground }]}>
@@ -278,58 +303,6 @@ export default function ReadingPlansScreen() {
           </Text>
         )}
       </View>
-      {isLoading && <Text style={{ color: colors.mutedForeground, textAlign: 'center', marginTop: 40 }}>Loading…</Text>}
-      {!isLoading && plans.length === 0 && (
-        <Text style={{ color: colors.mutedForeground, textAlign: 'center', marginTop: 40 }}>No reading plans yet.</Text>
-      )}
-      {plans.map(plan => {
-        const doneCount = plan.days.filter(d => completedDayIds.has(d.id)).length;
-        const expanded = expandedPlanId === plan.id;
-        return (
-          <View key={plan.id} style={[styles.planCard, { backgroundColor: colors.card }]}>
-            <Pressable onPress={() => setExpandedPlanId(expanded ? null : plan.id)} style={styles.planHeader}>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.planTitle, { color: colors.primary }]}>{plan.title}</Text>
-                {plan.description ? (
-                  <Text style={[styles.planDesc, { color: colors.mutedForeground }]}>{plan.description}</Text>
-                ) : null}
-                <View style={[styles.progressBarBg, { backgroundColor: colors.secondary }]}>
-                  <View style={[styles.progressBarFill, { backgroundColor: colors.gold as string, width: `${plan.days.length ? (doneCount / plan.days.length) * 100 : 0}%` }]} />
-                </View>
-                <Text style={[styles.progressText, { color: colors.mutedForeground }]}>
-                  {doneCount} of {plan.days.length} days complete
-                </Text>
-              </View>
-              <Feather name={expanded ? 'chevron-up' : 'chevron-down'} size={20} color={colors.mutedForeground} />
-            </Pressable>
-
-            {expanded && (
-              <View style={styles.daysList}>
-                {plan.days.map(day => {
-                  const done = completedDayIds.has(day.id);
-                  return (
-                    <Pressable
-                      key={day.id}
-                      onPress={() => handleCompleteDay(day.id)}
-                      style={[styles.dayRow, { borderTopColor: colors.border }]}
-                    >
-                      <View style={[styles.dayCheck, { backgroundColor: done ? colors.success as string : colors.secondary, borderColor: done ? colors.success as string : colors.border }]}>
-                        {done && <Feather name="check" size={13} color="#fff" />}
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.dayLabel, { color: colors.foreground }]}>Day {day.dayNumber} — {day.passage}</Text>
-                        {day.reflection ? (
-                          <Text style={[styles.dayReflection, { color: colors.mutedForeground }]} numberOfLines={2}>{day.reflection}</Text>
-                        ) : null}
-                      </View>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            )}
-          </View>
-        );
-      })}
     </ScrollView>
   );
 }
@@ -341,6 +314,7 @@ const styles = StyleSheet.create({
   quarterlyCard: { borderRadius: 16, padding: 18, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 6, elevation: 2 },
   quarterlyEyebrow: { fontSize: 11, fontFamily: 'Inter_700Bold', letterSpacing: 0.8, marginBottom: 5 },
   quarterlyTitle: { fontSize: 20, fontFamily: 'Inter_700Bold', marginBottom: 5 },
+  quarterlyDescription: { fontSize: 13, fontFamily: 'Inter_400Regular', marginBottom: 10, lineHeight: 19 },
   quarterlyMessage: { fontSize: 13, lineHeight: 20, marginTop: 14 },
   currentLesson: { borderRadius: 12, padding: 12, marginTop: 14, borderWidth: 1 },
   currentLessonLabel: { fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 0.8, textTransform: 'uppercase' },
@@ -352,6 +326,7 @@ const styles = StyleSheet.create({
   insightText: { fontSize: 12, fontFamily: 'Inter_500Medium', marginTop: 4, lineHeight: 18 },
   quarterlyLessons: { marginTop: 14, borderTopWidth: 1 },
   quarterlyLesson: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11, borderBottomWidth: StyleSheet.hairlineWidth },
+  lessonDetails: { borderRadius: 12, padding: 12, marginTop: 12, borderWidth: 1 },
   weekNumber: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
   weekNumberText: { fontSize: 13, fontFamily: 'Inter_700Bold' },
   lessonInfo: { flex: 1, gap: 3 },
@@ -359,16 +334,4 @@ const styles = StyleSheet.create({
   lessonDate: { fontSize: 11, fontFamily: 'Inter_400Regular' },
   lessonPage: { fontSize: 11, fontFamily: 'Inter_500Medium' },
   quarterlyNote: { fontSize: 11, lineHeight: 16, marginTop: 12 },
-  planCard: { borderRadius: 16, padding: 18, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 6, elevation: 2 },
-  planHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  planTitle: { fontSize: 17, fontFamily: 'Inter_700Bold', marginBottom: 4 },
-  planDesc: { fontSize: 13, fontFamily: 'Inter_400Regular', marginBottom: 10, lineHeight: 19 },
-  progressBarBg: { height: 6, borderRadius: 3, overflow: 'hidden', marginBottom: 6 },
-  progressBarFill: { height: 6, borderRadius: 3 },
-  progressText: { fontSize: 12, fontFamily: 'Inter_500Medium' },
-  daysList: { marginTop: 14 },
-  dayRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 12, borderTopWidth: 1 },
-  dayCheck: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, marginTop: 2 },
-  dayLabel: { fontSize: 14, fontFamily: 'Inter_600SemiBold', marginBottom: 2 },
-  dayReflection: { fontSize: 12, fontFamily: 'Inter_400Regular', lineHeight: 18 },
 });

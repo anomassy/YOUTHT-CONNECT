@@ -14,7 +14,6 @@ if __name__ == "__main__":
         "reading_plans",
         "reading_plan_days",
         "reading_progress",
-        "reading_summaries",
         "prayer_requests",
         "prayer_prays",
         "events",

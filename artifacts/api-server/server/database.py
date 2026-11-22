@@ -291,13 +291,6 @@ def create_tables():
         completed_at TIMESTAMP DEFAULT NOW() NOT NULL
     );
 
-    CREATE TABLE IF NOT EXISTS reading_summaries (
-        id SERIAL PRIMARY KEY,
-        plan_day_id INTEGER NOT NULL UNIQUE,
-        summary TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT NOW() NOT NULL
-    );
-
     CREATE TABLE IF NOT EXISTS prayer_requests (
         id SERIAL PRIMARY KEY,
         user_id INTEGER NOT NULL,

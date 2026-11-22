@@ -55,6 +55,23 @@ The app lists the current Seventh-day Adventist Adult Sabbath School Bible Study
 
 Add the Clerk variables above to the Render web service's environment settings; they are intentionally not database credentials and do not belong on the PostgreSQL resource. For any changed `VITE_` variable, trigger a new deploy so the frontend bundle is rebuilt. After changing server-only variables, restart or redeploy the web service.
 
+## Webzim cPanel hosting
+
+The supplied **Webzim Hosting Guide 2026 v3** explains cPanel access (pages 4–5), MySQL database and user setup (pages 60–62), website file uploads by File Manager or FTPS (pages 63–67), and how to request SSH access (page 68). Its upload instructions publish website files under `public_html`.
+
+Those instructions do not cover running this app's Python/FastAPI API as a persistent service, routing `/api` requests to it, or configuring persistent media storage. The React site alone is not the complete app: sign-in, lessons, and other features make authenticated `/api` requests. Do not publish just the web build expecting those features to work.
+
+Before deploying the full app to Webzim:
+
+1. Confirm with Webzim that the hosting plan supports a persistent Python ASGI app (including installing `artifacts/api-server/requirements.txt`), routes `/api` on the same HTTPS origin to that app, and provides persistent storage for uploads. The guide's SSH instructions alone do not confirm these capabilities.
+2. In cPanel, create the MySQL database and user and grant access as described on pages 60–62. Set `DATABASE_URL` in the ASGI app environment using the MySQL connection details (URL-encode special characters in the username or password). Set `AUTH_PROVIDER=local` and a long random `SESSION_SECRET`, or configure Clerk using the instructions above. Never put secrets in `public_html` or commit them to the repository.
+3. Configure the cPanel ASGI runner to use `artifacts/api-server` as the Python import directory, install `artifacts/api-server/requirements.txt`, and run `server.main:app` with Uvicorn. For a runner that accepts a shell command from the repository root, use `uvicorn server.main:app --app-dir artifacts/api-server --host 0.0.0.0 --port ${PORT:-10000}`; follow Webzim's instructions for its assigned port and persistent process management. Keep the `artifacts/web/dist/public` directory in its relative location: FastAPI serves the built React app and SPA routes from that directory, and the same app serves `/api`.
+4. Set `STORAGE_BACKEND=local` and `LOCAL_STORAGE_DIR` to a persistent directory outside `public_html` for local audio uploads. The `postgres` object-storage option requires PostgreSQL, not the Webzim MySQL database; check the supported storage options with Webzim before enabling features that need object storage. Do not use the Replit storage backend.
+5. Build with `pnpm --filter @workspace/web build`, then upload the `artifacts` directory (including `artifacts/api-server` and `artifacts/web/dist/public`) to the ASGI application's project root using File Manager or FTPS as described on pages 63–67. Do not upload only the frontend to `public_html`: that will not run the API or serve authenticated app features. Configure `youth-connect.co.zw` to route to the ASGI app using Webzim's instructions.
+6. Ask Webzim to install/activate a valid SSL certificate for `youth-connect.co.zw` before signing in or making the app available. Verify HTTPS, `/api/healthz`, sign-in, and quarterly lesson loading after deployment.
+
+If the Webzim plan cannot run the API and route `/api`, it cannot host this full-stack app by uploading the static build alone. Arrange a compatible backend host and API routing first; the current web client uses same-origin `/api` requests.
+
 ## Troubleshooting
 
 - **Database connection or startup failure:** Confirm both Blueprint resources are available and the web service's `DATABASE_URL` is linked to `youtht-connect-db` using its internal connection string. Review the web service logs.

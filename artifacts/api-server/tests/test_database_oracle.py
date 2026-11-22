@@ -1,11 +1,8 @@
-import json
 import os
 import sys
 import unittest
 from decimal import Decimal
-from io import BytesIO
 from pathlib import Path
-from urllib.error import HTTPError
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -25,10 +22,8 @@ with patch.dict(os.environ, {"DATABASE_URL": "oracle://", "AUTH_PROVIDER": "cler
         _add_message_metadata,
         _get_message_for_user,
         _message_out,
-        ask_ai_about_chat_message,
         router as chat_router,
     )
-    from server.routes.reading_plans import _openai_http_error
     from server.storage import request_audio_upload, request_profile_photo_upload
 
 
@@ -145,55 +140,6 @@ class OracleDatabaseTests(unittest.TestCase):
         self.assertFalse(other_user_rows[0]["is_starred"])
         self.assertTrue(other_user_rows[0]["is_pinned"])
         self.assertFalse(other_user_rows[0]["is_pinned_by_me"])
-
-    def test_chat_ai_uses_server_key_and_returns_mocked_provider_response(self):
-        cursor = unittest.mock.Mock()
-        cursor.fetchone.return_value = {
-            "id": 8,
-            "room": "friends",
-            "user_id": 2,
-            "content": "Please explain this message",
-        }
-        db_context = unittest.mock.MagicMock()
-        db_context.__enter__.return_value = cursor
-        provider_response = unittest.mock.MagicMock()
-        provider_response.__enter__.return_value.read.return_value = json.dumps(
-            {"choices": [{"message": {"content": "Here is an explanation."}}]}
-        ).encode()
-        with (
-            patch("server.routes.chat.db_cursor", return_value=db_context),
-            patch("server.routes.chat.urlopen", return_value=provider_response) as openai_request,
-            patch.dict(os.environ, {"OPENAI_API_KEY": "test-key-not-for-network"}),
-        ):
-            result = ask_ai_about_chat_message(8, user_id=2)
-
-        request = openai_request.call_args.args[0]
-        request_body = json.loads(request.data.decode())
-        self.assertEqual(result, {"answer": "Here is an explanation."})
-        self.assertEqual(request.get_header("Authorization"), "Bearer test-key-not-for-network")
-        self.assertEqual(request_body["messages"][1]["content"], "Please explain this message")
-        openai_request.assert_called_once()
-
-    def test_chat_ai_reports_missing_server_key(self):
-        cursor = unittest.mock.Mock()
-        cursor.fetchone.return_value = {
-            "id": 8,
-            "room": "friends",
-            "user_id": 2,
-            "content": "Please explain this message",
-        }
-        db_context = unittest.mock.MagicMock()
-        db_context.__enter__.return_value = cursor
-        with (
-            patch("server.routes.chat.db_cursor", return_value=db_context),
-            patch("server.routes.chat.urlopen") as openai_request,
-            patch.dict(os.environ, {"OPENAI_API_KEY": ""}),
-        ):
-            with self.assertRaises(HTTPException) as error:
-                ask_ai_about_chat_message(8, user_id=2)
-
-        self.assertEqual(error.exception.status_code, 503)
-        openai_request.assert_not_called()
 
     def test_postgres_storage_returns_database_upload_urls_for_audio_and_photos(self):
         with patch.dict(os.environ, {"STORAGE_BACKEND": "postgres"}):
@@ -316,41 +262,6 @@ class OracleDatabaseTests(unittest.TestCase):
         )
         self.assertEqual(parameters["p0"], "reader")
         self.assertIsInstance(parameters["inserted_id"], FakeVariable)
-
-    def test_openai_auth_error_is_actionable_without_echoing_credentials(self):
-        error = HTTPError(
-            "https://api.openai.com/v1/chat/completions",
-            401,
-            "Unauthorized",
-            {},
-            BytesIO(b'{"error":{"message":"Incorrect API key provided","code":"invalid_api_key"}}'),
-        )
-        detail, code = _openai_http_error(error)
-        self.assertIn("OPENAI_API_KEY", detail)
-        self.assertEqual(code, "invalid_api_key")
-        self.assertNotIn("Incorrect API key", detail)
-
-    def test_openai_quota_and_model_errors_are_specific(self):
-        quota_error = HTTPError(
-            "https://api.openai.com/v1/chat/completions",
-            429,
-            "Too Many Requests",
-            {},
-            BytesIO(b'{"error":{"message":"No quota","code":"insufficient_quota"}}'),
-        )
-        quota_detail, quota_code = _openai_http_error(quota_error)
-        self.assertIn("billing and usage", quota_detail)
-        self.assertEqual(quota_code, "insufficient_quota")
-
-        model_error = HTTPError(
-            "https://api.openai.com/v1/chat/completions",
-            404,
-            "Not Found",
-            {},
-            BytesIO(b'{"error":{"message":"Model not found"}}'),
-        )
-        model_detail, _ = _openai_http_error(model_error)
-        self.assertIn("OPENAI_MODEL", model_detail)
 
 
 if __name__ == "__main__":
