@@ -51,6 +51,48 @@ class QuarterlyTests(unittest.TestCase):
             {"week", "title", "dateRange", "page"},
         )
 
+    @patch("server.routes.reading_plans.db_cursor")
+    def test_quarterly_endpoint_normalizes_oracle_current_flag_and_returns_full_day(self, db_cursor):
+        cursor = db_cursor.return_value.__enter__.return_value
+        lesson_text = "A complete lesson with multiple paragraphs.\n\nThe full closing reflection."
+        cursor.fetchall.side_effect = [
+            [
+                {
+                    "id": 12,
+                    "title": "The Gift of Prophecy",
+                    "publication": "Sabbath School",
+                    "quarter": "Q4 2026",
+                    "summary": "",
+                    "is_current": "Y",
+                    "created_at": None,
+                },
+                {
+                    "id": 11,
+                    "title": "Earlier edition",
+                    "publication": "Sabbath School",
+                    "quarter": "Q3 2026",
+                    "summary": "",
+                    "is_current": "N",
+                    "created_at": None,
+                },
+            ],
+            [{
+                "id": 40,
+                "week_number": 1,
+                "day_number": 2,
+                "day_title": "A full daily reading",
+                "scripture_ref": "John 1:1-5",
+                "content": lesson_text,
+            }],
+        ]
+
+        response = get_quarterly_reading(user_id=1, edition_id=12)
+
+        self.assertIs(response["quarterly"]["isCurrent"], True)
+        self.assertIs(response["quarterlies"][0]["isCurrent"], True)
+        self.assertIs(response["quarterlies"][1]["isCurrent"], False)
+        self.assertEqual(response["quarterly"]["lessons"][0]["days"][0]["content"], lesson_text)
+
     def test_create_quarterly_rejects_missing_required_fields(self):
         with self.assertRaises(HTTPException) as error:
             create_quarterly(

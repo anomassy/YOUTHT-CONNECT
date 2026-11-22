@@ -17,6 +17,12 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+def _database_boolean(value) -> bool:
+    if isinstance(value, str):
+        return value.strip().upper() in {"1", "TRUE", "Y"}
+    return value is True or value == 1
+
+
 class ReadingPlanDayInput(BaseModel):
     dayNumber: int
     passage: str
@@ -183,7 +189,10 @@ def get_quarterly_reading(
                FROM quarterly_editions
                ORDER BY is_current DESC, created_at DESC"""
         )
-        editions = [dict(row) for row in cur.fetchall()]
+        editions = [
+            {**dict(row), "is_current": _database_boolean(row["is_current"])}
+            for row in cur.fetchall()
+        ]
 
         if not editions:
             return {"quarterly": CURRENT_QUARTERLY, "quarterlies": []}

@@ -12,7 +12,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { CheckSquare, Copy, Flag, Forward, Heart, Info, MessageSquareQuote, Pin, Reply, Send, Star, Trash2, User as UserIcon, UserCircle, Users } from 'lucide-react';
+import { CheckSquare, Copy, Flag, Forward, Heart, Info, LockKeyhole, MessageCircle, MessageSquareQuote, Pin, Reply, Send, ShieldAlert, Star, Trash2, User as UserIcon, UserCircle, Users } from 'lucide-react';
 import { formatDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -34,6 +34,7 @@ export default function Community() {
   const [directUserId, setDirectUserId] = useState<number | null>(null);
   const [users, setUsers] = useState<ChatUser[]>([]);
   const [usersError, setUsersError] = useState('');
+  const selectedMember = users.find((member) => member.id === directUserId);
 
   useEffect(() => {
     if (!token) return;
@@ -64,41 +65,47 @@ export default function Community() {
   }, [getToken, token]);
   
   return (
-    <div className="h-[100dvh] md:h-screen flex flex-col md:p-6 max-w-5xl mx-auto pt-safe">
-      <div className="px-4 py-4 md:px-0 flex-shrink-0">
-        <h1 className="text-2xl font-serif text-primary">Community</h1>
-      </div>
+    <div className="mx-auto flex h-[100dvh] max-w-6xl flex-col px-0 pt-safe md:h-screen md:p-6">
+      <header className="flex flex-shrink-0 items-center gap-3 px-4 py-4 md:px-0">
+        <span className="flex size-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+          <MessageCircle className="size-5" aria-hidden="true" />
+        </span>
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Messages</h1>
+          <p className="text-sm text-muted-foreground">Connect with your community</p>
+        </div>
+      </header>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
-        <div className="px-4 md:px-0 flex-shrink-0">
-          <TabsList className="w-full grid grid-cols-4">
-            <TabsTrigger value="friends" className="gap-2">
-              <UserIcon className="w-4 h-4 hidden sm:block" /> Friends
+        <div className="flex-shrink-0 px-3 md:px-0">
+          <TabsList className="grid h-auto w-full grid-cols-4 rounded-2xl bg-muted/70 p-1">
+            <TabsTrigger value="friends" className="gap-2 rounded-xl py-2">
+              <UserIcon className="size-4" /> <span>Friends</span>
             </TabsTrigger>
-            <TabsTrigger value="direct" className="gap-2">
-              <Users className="w-4 h-4 hidden sm:block" /> Direct
+            <TabsTrigger value="direct" className="gap-2 rounded-xl py-2">
+              <Users className="size-4" /> <span>Direct</span>
             </TabsTrigger>
-            <TabsTrigger value="anonymous" className="gap-2">
-              <UserCircle className="w-4 h-4 hidden sm:block" /> Anonymous
+            <TabsTrigger value="anonymous" className="gap-2 rounded-xl py-2">
+              <UserCircle className="size-4" /> <span>Anonymous</span>
             </TabsTrigger>
-            <TabsTrigger value="pastor" className="gap-2">
-              <MessageSquareQuote className="w-4 h-4 hidden sm:block" /> Ask Pastor
+            <TabsTrigger value="pastor" className="gap-2 rounded-xl py-2">
+              <MessageSquareQuote className="size-4" /> <span>Ask Pastor</span>
             </TabsTrigger>
           </TabsList>
         </div>
 
-        <div className="flex-1 min-h-0 relative mt-4">
+        <div className="relative mt-3 min-h-0 flex-1">
           <TabsContent value="friends" className="absolute inset-0 mt-0 data-[state=active]:flex flex-col">
-            <ChatRoom room="friends" displayName={user?.firstName || 'Friend'} userId={user?.id || 0} users={users} />
+            <ChatRoom room="friends" title="Friends chat" displayName={user?.firstName || 'Friend'} userId={user?.id || 0} users={users} />
           </TabsContent>
           <TabsContent value="direct" className="absolute inset-0 mt-0 data-[state=active]:flex flex-col">
-            <div className="px-4 pb-3">
+            <div className="px-4 pb-3 md:px-0">
               <label htmlFor="direct-message-user" className="sr-only">Choose a member</label>
               <select
                 id="direct-message-user"
                 value={directUserId ?? ''}
                 onChange={(event) => setDirectUserId(event.target.value ? Number(event.target.value) : null)}
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                className="h-11 w-full rounded-xl border bg-card px-3 text-sm shadow-sm"
               >
                 <option value="">Choose a member to message</option>
                 {users.map((member) => (
@@ -113,19 +120,24 @@ export default function Community() {
               <ChatRoom
                 key={`dm-${directUserId}`}
                 room="direct"
+                title={selectedMember ? `${selectedMember.firstName} ${selectedMember.lastName}` : 'Direct message'}
                 otherUserId={directUserId}
                 displayName={user?.firstName || 'Friend'}
                 userId={user?.id || 0}
                 users={users}
               />
             ) : (
-              <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-                Select a member to start a private conversation.
+              <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+                <span className="flex size-14 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <MessageCircle className="size-6" aria-hidden="true" />
+                </span>
+                <p className="font-medium">Choose someone to message</p>
+                <p className="max-w-xs text-sm text-muted-foreground">Select a community member above to start a one-to-one conversation.</p>
               </div>
             )}
           </TabsContent>
           <TabsContent value="anonymous" className="absolute inset-0 mt-0 data-[state=active]:flex flex-col">
-            <ChatRoom room="anonymous" displayName={anonAlias} userId={user?.id || 0} users={users} />
+            <ChatRoom room="anonymous" title="Anonymous chat" displayName={anonAlias} userId={user?.id || 0} users={users} />
           </TabsContent>
           <TabsContent value="pastor" className="absolute inset-0 mt-0 data-[state=active]:flex flex-col">
             <AskPastor />
@@ -153,12 +165,14 @@ type ChatMessage = {
 
 function ChatRoom({
   room,
+  title,
   otherUserId,
   displayName,
   userId,
   users,
 }: {
   room: 'friends' | 'anonymous' | 'direct';
+  title: string;
   otherUserId?: number;
   displayName: string;
   userId: number;
@@ -399,15 +413,37 @@ function ChatRoom({
   };
 
   return (
-    <Card className="flex-1 flex flex-col h-full rounded-none border-x-0 md:rounded-xl md:border-x shadow-none md:shadow-sm overflow-hidden bg-card">
-      <div className="flex-1 overflow-y-auto p-4 space-y-4" ref={scrollRef}>
+    <Card className="flex h-full flex-1 flex-col overflow-hidden rounded-none border-x-0 bg-card shadow-none md:rounded-2xl md:border-x md:shadow-sm">
+      <div className="flex flex-shrink-0 items-center gap-3 border-b px-4 py-3">
+        <span className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+          {room === 'anonymous' ? <UserCircle className="size-5" aria-hidden="true" /> : <Users className="size-5" aria-hidden="true" />}
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate font-semibold">{title}</h2>
+          <p className="text-xs text-muted-foreground">{room === 'direct' ? 'One-to-one conversation' : 'Community conversation'}</p>
+        </div>
+        <span className="hidden items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground sm:inline-flex">
+          <LockKeyhole className="size-3.5" aria-hidden="true" /> Signed-in member
+        </span>
+      </div>
+      <div className="flex-shrink-0 border-b border-amber-500/20 bg-amber-500/5 px-4 py-2.5">
+        <p className="flex items-start gap-2 text-xs leading-relaxed text-foreground/80">
+          <ShieldAlert className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+          <span>Messages are not end-to-end encrypted yet. Avoid sharing sensitive or confidential information.</span>
+        </p>
+      </div>
+      <div className="flex-1 space-y-4 overflow-y-auto bg-muted/15 p-4" ref={scrollRef} aria-live="polite">
         {isLoading ? (
-          <div className="flex justify-center p-4 text-muted-foreground"><div className="animate-spin w-5 h-5 border-2 border-primary border-t-transparent rounded-full"/></div>
+          <div className="flex justify-center p-4 text-muted-foreground"><div className="size-5 animate-spin rounded-full border-2 border-primary border-t-transparent" aria-label="Loading messages" /></div>
         ) : loadError ? (
           <p role="alert" className="text-center py-8 text-sm text-destructive">{loadError}</p>
         ) : messages.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground h-full flex items-center justify-center">
-            No messages yet. Say hello!
+          <div className="flex h-full flex-col items-center justify-center gap-2 py-12 text-center text-muted-foreground">
+            <span className="flex size-12 items-center justify-center rounded-full bg-background text-primary shadow-sm">
+              <MessageCircle className="size-5" aria-hidden="true" />
+            </span>
+            <p className="font-medium text-foreground">A new conversation</p>
+            <p className="text-sm">Send a message to get things started.</p>
           </div>
         ) : (
           messages.map((msg) => {
@@ -416,7 +452,7 @@ function ChatRoom({
               <div
                 key={msg.id}
                 className={cn(
-                  "flex flex-col max-w-[85%] rounded-lg transition-colors",
+                  "flex max-w-[88%] flex-col rounded-2xl transition-colors sm:max-w-[75%]",
                   isMe ? "ml-auto items-end" : "mr-auto items-start",
                   (selectionMode ? selectedMessageIds.includes(msg.id) : selectedMessageId === msg.id) && "ring-2 ring-primary/60 ring-offset-2 ring-offset-background",
                 )}
@@ -429,7 +465,7 @@ function ChatRoom({
                   touchStartX.current = null;
                 }}
               >
-                <span className="text-[10px] text-muted-foreground mb-1 px-1">{msg.displayName}</span>
+                {(!isMe || room !== 'direct') && <span className="mb-1 px-2 text-[11px] font-medium text-muted-foreground">{msg.displayName}</span>}
                 <div
                   role="button"
                   tabIndex={0}
@@ -455,8 +491,8 @@ function ChatRoom({
                     }
                   }}
                   className={cn(
-                  "px-4 py-2 rounded-2xl text-sm",
-                  isMe ? "bg-primary text-primary-foreground rounded-tr-sm" : "bg-muted rounded-tl-sm"
+                  "whitespace-pre-wrap break-words rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm",
+                  isMe ? "rounded-tr-sm bg-primary text-primary-foreground" : "rounded-tl-sm border bg-card"
                 )}>
                   {msg.replyTo && (
                     <div className="mb-2 border-l-2 border-current/40 pl-2 text-xs opacity-80">
@@ -466,6 +502,11 @@ function ChatRoom({
                   )}
                   {msg.content}
                 </div>
+                <time dateTime={msg.createdAt} className="mt-1 px-2 text-[10px] text-muted-foreground">
+                  {Number.isNaN(new Date(msg.createdAt).getTime())
+                    ? ''
+                    : new Date(msg.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                </time>
                 {(msg.isPinned || msg.isStarred) && (
                   <div className="mt-1 flex gap-2 px-1 text-muted-foreground" aria-label="Message saved or pinned">
                     {msg.isPinned && <Pin className="h-3.5 w-3.5" aria-label="Pinned" />}
@@ -522,7 +563,7 @@ function ChatRoom({
           })
         )}
       </div>
-      <div className="p-3 border-t bg-card mt-auto flex-shrink-0">
+      <div className="mt-auto flex-shrink-0 border-t bg-card p-3 sm:p-4">
         {selectionMode && (
           <div className="mb-2 flex flex-wrap items-center gap-2 rounded-md bg-muted p-2 text-sm">
             <span className="mr-auto">{selectedMessageIds.length} selected</span>
@@ -581,15 +622,16 @@ function ChatRoom({
             </div>
           </div>
         )}
-        <form onSubmit={handleSend} className="flex gap-2">
+        <form onSubmit={handleSend} className="flex items-center gap-2">
           <Input 
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             placeholder={room === 'direct' ? 'Message privately…' : 'Type a message...'}
-            className="flex-1 bg-muted/50 border-transparent focus-visible:ring-1"
+            aria-label="Write a message"
+            className="h-11 flex-1 rounded-full border-transparent bg-muted/60 px-4 focus-visible:ring-1"
           />
-          <Button type="submit" size="icon" disabled={!message.trim()} className="rounded-full flex-shrink-0">
-            <Send className="w-4 h-4" />
+          <Button type="submit" size="icon" aria-label="Send message" disabled={!message.trim()} className="size-11 flex-shrink-0 rounded-full shadow-sm">
+            <Send className="size-4" />
           </Button>
         </form>
       </div>
