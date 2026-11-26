@@ -57,20 +57,22 @@ Add the Clerk variables above to the Render web service's environment settings; 
 
 ## Webzim cPanel hosting
 
-The supplied **Webzim Hosting Guide 2026 v3** explains cPanel access (pages 4–5), MySQL database and user setup (pages 60–62), website file uploads by File Manager or FTPS (pages 63–67), and how to request SSH access (page 68). Its upload instructions publish website files under `public_html`.
+The supplied **Webzim Hosting Guide 2026 v3** covers cPanel, MySQL setup, file uploads, and SSH access. The Webzim plan for this deployment has separately been confirmed to support a persistent Python ASGI app, same-origin `/api` routing, and persistent upload storage. The static React site alone is not the complete app; the API serves sign-in, lessons, and other authenticated features.
 
-Those instructions do not cover running this app's Python/FastAPI API as a persistent service, routing `/api` requests to it, or configuring persistent media storage. The React site alone is not the complete app: sign-in, lessons, and other features make authenticated `/api` requests. Do not publish just the web build expecting those features to work.
+This deployment uses **one fresh Webzim MySQL database** as the app database. The application currently supports one active `DATABASE_URL`; it cannot split its tables across two database servers. Audio and profile uploads use persistent files, not a second database. No existing database records are imported by these steps.
 
-Before deploying the full app to Webzim:
+1. In cPanel, create a MySQL database and user, then grant the user access to that database. Configure these values in the ASGI app's private environment (not in `public_html` or source control):
+   - `DATABASE_URL=mysql://<db-user>:<url-encoded-password>@<db-host>:3306/<db-name>`
+   - `STORAGE_BACKEND=local`
+   - `LOCAL_STORAGE_DIR=<absolute persistent path outside public_html>`
+   - `AUTH_PROVIDER=local`, a long random `SESSION_SECRET`, and a strong `ADMIN_PASSWORD`; alternatively, configure Clerk using the instructions above.
+2. Build the client before uploading: `pnpm --filter @workspace/web build`. Install the API dependencies in the ASGI environment with `python -m pip install -r artifacts/api-server/requirements.txt`.
+3. Configure the cPanel ASGI runner with `artifacts/api-server` as the Python import directory and `server.main:app` as the application. For a runner that accepts a command from the repository root, use `uvicorn server.main:app --app-dir artifacts/api-server --host 0.0.0.0 --port ${PORT:-10000}`. Follow Webzim's instructions for its assigned port and process management.
+4. Upload the `artifacts` directory, including `artifacts/api-server` and `artifacts/web/dist/public`, while preserving their relative paths. FastAPI serves the built app and SPA routes from `artifacts/web/dist/public`, as well as `/api`. Do not upload only the web build to `public_html`.
+5. Keep `LOCAL_STORAGE_DIR` outside `public_html` and on persistent storage. Do not set `STORAGE_BACKEND=postgres` for this MySQL deployment; PostgreSQL object storage requires a PostgreSQL `DATABASE_URL`. Do not use the Replit storage backend.
+6. On first startup, the API creates its tables in the fresh MySQL database. Check the ASGI logs for `Database tables verified.` and visit `https://youth-connect.co.zw/api/healthz`. Activate a valid SSL certificate before signing in, then verify sign-in, messaging, and quarterly lesson loading.
 
-1. Confirm with Webzim that the hosting plan supports a persistent Python ASGI app (including installing `artifacts/api-server/requirements.txt`), routes `/api` on the same HTTPS origin to that app, and provides persistent storage for uploads. The guide's SSH instructions alone do not confirm these capabilities.
-2. In cPanel, create the MySQL database and user and grant access as described on pages 60–62. Set `DATABASE_URL` in the ASGI app environment using the MySQL connection details (URL-encode special characters in the username or password). Set `AUTH_PROVIDER=local` and a long random `SESSION_SECRET`, or configure Clerk using the instructions above. Never put secrets in `public_html` or commit them to the repository.
-3. Configure the cPanel ASGI runner to use `artifacts/api-server` as the Python import directory, install `artifacts/api-server/requirements.txt`, and run `server.main:app` with Uvicorn. For a runner that accepts a shell command from the repository root, use `uvicorn server.main:app --app-dir artifacts/api-server --host 0.0.0.0 --port ${PORT:-10000}`; follow Webzim's instructions for its assigned port and persistent process management. Keep the `artifacts/web/dist/public` directory in its relative location: FastAPI serves the built React app and SPA routes from that directory, and the same app serves `/api`.
-4. Set `STORAGE_BACKEND=local` and `LOCAL_STORAGE_DIR` to a persistent directory outside `public_html` for local audio uploads. The `postgres` object-storage option requires PostgreSQL, not the Webzim MySQL database; check the supported storage options with Webzim before enabling features that need object storage. Do not use the Replit storage backend.
-5. Build with `pnpm --filter @workspace/web build`, then upload the `artifacts` directory (including `artifacts/api-server` and `artifacts/web/dist/public`) to the ASGI application's project root using File Manager or FTPS as described on pages 63–67. Do not upload only the frontend to `public_html`: that will not run the API or serve authenticated app features. Configure `youth-connect.co.zw` to route to the ASGI app using Webzim's instructions.
-6. Ask Webzim to install/activate a valid SSL certificate for `youth-connect.co.zw` before signing in or making the app available. Verify HTTPS, `/api/healthz`, sign-in, and quarterly lesson loading after deployment.
-
-If the Webzim plan cannot run the API and route `/api`, it cannot host this full-stack app by uploading the static build alone. Arrange a compatible backend host and API routing first; the current web client uses same-origin `/api` requests.
+The fresh database starts with the app schema only; no Oracle, PostgreSQL, or local MySQL data is copied. Back up any source database separately before planning a migration.
 
 ## Troubleshooting
 

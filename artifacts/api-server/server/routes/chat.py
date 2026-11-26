@@ -91,6 +91,71 @@ def list_chat_reports(user_id: int = Depends(require_admin)):
     }
 
 
+@router.get("/chat/conversations")
+def list_chat_conversations(user_id: int = Depends(require_auth)):
+    with db_cursor() as cur:
+        cur.execute(
+            """SELECT id, first_name, last_name, username FROM users
+               WHERE id != %s ORDER BY first_name, last_name""",
+            (user_id,),
+        )
+        users = [dict(row) for row in cur.fetchall()]
+
+        rooms_by_user = {
+            row["id"]: _direct_room(user_id, row["id"])
+            for row in users
+        }
+        latest_by_room = {}
+        if rooms_by_user:
+            placeholders = ", ".join(["%s"] * len(rooms_by_user))
+            cur.execute(
+                f"""SELECT room, user_id, display_name, content, created_at
+                    FROM (
+                        SELECT room, user_id, display_name, content, created_at,
+                               ROW_NUMBER() OVER (
+                                   PARTITION BY room
+                                   ORDER BY created_at DESC, id DESC
+                               ) AS message_rank
+                        FROM chat_messages
+                        WHERE room IN ({placeholders})
+                    ) ranked
+                    WHERE message_rank = 1""",
+                tuple(rooms_by_user.values()),
+            )
+            latest_by_room = {
+                row["room"]: dict(row) for row in cur.fetchall()
+            }
+
+    conversations = []
+    for row in users:
+        latest = latest_by_room.get(rooms_by_user[row["id"]])
+        conversations.append({
+            "id": row["id"],
+            "firstName": row["first_name"],
+            "lastName": row["last_name"],
+            "username": row["username"],
+            "lastMessage": (
+                {
+                    "userId": latest["user_id"],
+                    "displayName": latest["display_name"],
+                    "content": latest["content"],
+                    "createdAt": latest["created_at"],
+                }
+                if latest
+                else None
+            ),
+        })
+
+    conversations.sort(
+        key=lambda item: (
+            item["lastMessage"] is not None,
+            item["lastMessage"]["createdAt"] if item["lastMessage"] else "",
+        ),
+        reverse=True,
+    )
+    return {"users": conversations}
+
+
 @router.get("/chat/{room}")
 def list_messages(room: str, user_id: int = Depends(require_auth)):
     if room not in VALID_ROOMS:

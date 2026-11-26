@@ -1,13 +1,17 @@
+import asyncio
 import os
 import sys
+import tempfile
 import unittest
 from decimal import Decimal
 from pathlib import Path
 from unittest.mock import patch
+from uuid import uuid4
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 with patch.dict(os.environ, {"DATABASE_URL": "oracle://", "AUTH_PROVIDER": "clerk"}):
     from fastapi import HTTPException
+    from starlette.requests import Request
     from starlette.routing import Match
     from server.database import (
         OracleCursor,
@@ -16,14 +20,22 @@ with patch.dict(os.environ, {"DATABASE_URL": "oracle://", "AUTH_PROVIDER": "cler
         _oracle_sql,
         create_tables,
     )
-    from server.routes.music import _database_object_response
+    from server.routes.music import (
+        _database_object_response,
+        serve_storage_object,
+        upload_local_profile_photo,
+    )
     from server.routes.auth import AdminLoginRequest, admin_login
     from server.routes.chat import (
         _add_message_metadata,
         _get_message_for_user,
         _message_out,
+        list_chat_conversations,
+        list_direct_messages,
+        send_direct_message,
         router as chat_router,
     )
+    from server.routes.chat import SendMessageRequest
     from server.storage import request_audio_upload, request_profile_photo_upload
 
 
@@ -69,6 +81,7 @@ class OracleDatabaseTests(unittest.TestCase):
     def test_direct_message_user_route_precedes_parameterized_chat_room(self):
         for path, endpoint_name in (
             ("/chat/users", "list_chat_users"),
+            ("/chat/conversations", "list_chat_conversations"),
             ("/chat/reports", "list_chat_reports"),
         ):
             matching_route = next(
@@ -86,6 +99,82 @@ class OracleDatabaseTests(unittest.TestCase):
                 is Match.FULL
             )
             self.assertEqual(matching_route.endpoint.__name__, endpoint_name)
+
+    @patch("server.routes.chat.db_cursor")
+    def test_direct_conversation_list_includes_latest_message_preview(self, db_cursor):
+        cursor = db_cursor.return_value.__enter__.return_value
+        cursor.fetchall.side_effect = [
+            [{
+                "id": 3,
+                "first_name": "Ari",
+                "last_name": "Member",
+                "username": "ari",
+            }],
+            [{
+                "room": "dm:1:3",
+                "user_id": 3,
+                "display_name": "Ari",
+                "content": "See you soon",
+                "created_at": "2026-11-26T09:00:00",
+            }],
+        ]
+
+        response = list_chat_conversations(user_id=1)
+
+        self.assertEqual(response["users"][0]["id"], 3)
+        self.assertEqual(
+            response["users"][0]["lastMessage"]["content"],
+            "See you soon",
+        )
+        self.assertIn("ROW_NUMBER()", cursor.execute.call_args_list[1].args[0])
+
+    @patch("server.routes.chat.insert_returning")
+    @patch("server.routes.chat.db_cursor")
+    def test_direct_message_send_and_receive_use_same_private_room(
+        self, db_cursor, insert_returning,
+    ):
+        cursor = db_cursor.return_value.__enter__.return_value
+        cursor.fetchone.return_value = {"id": 3}
+        insert_returning.return_value = {
+            "id": 12,
+            "room": "dm:1:3",
+            "user_id": 1,
+            "display_name": "Member",
+            "content": "Hello there",
+            "reply_to_id": None,
+            "created_at": "2026-11-26T09:00:00",
+        }
+
+        sent = send_direct_message(
+            3,
+            SendMessageRequest(content=" Hello there ", displayName="Member"),
+            user_id=1,
+        )
+
+        self.assertEqual(sent["message"]["content"], "Hello there")
+        self.assertEqual(sent["message"]["room"], "dm:1:3")
+        insert_returning.assert_called_once()
+
+        cursor.fetchone.return_value = {"id": 3}
+        cursor.fetchall.side_effect = [
+            [{
+                "id": 12,
+                "room": "dm:1:3",
+                "user_id": 1,
+                "display_name": "Member",
+                "content": "Hello there",
+                "reply_to_id": None,
+                "reply_content": None,
+                "reply_display_name": None,
+                "created_at": "2026-11-26T09:00:00",
+            }],
+            [],
+            [],
+        ]
+        received = list_direct_messages(1, user_id=3)
+
+        self.assertEqual(received["messages"][0]["id"], sent["message"]["id"])
+        self.assertEqual(received["messages"][0]["content"], "Hello there")
 
     def test_chat_message_action_lookup_restricts_direct_message_participants(self):
         class MessageCursor:
@@ -150,6 +239,52 @@ class OracleDatabaseTests(unittest.TestCase):
         self.assertTrue(audio["objectPath"].startswith("/objects/uploads/"))
         self.assertIn("/api/storage/database-uploads/", photo["uploadURL"])
         self.assertTrue(photo["objectPath"].startswith("/objects/uploads/"))
+
+    def test_local_profile_photo_upload_and_read_use_persistent_file_storage(self):
+        image_bytes = b"\x89PNG\r\n\x1a\nprofile-image"
+        object_id = f"{uuid4()}.png"
+
+        def image_request():
+            messages = [{
+                "type": "http.request",
+                "body": image_bytes,
+                "more_body": False,
+            }]
+
+            async def receive():
+                return messages.pop(0)
+
+            return Request(
+                {
+                    "type": "http",
+                    "http_version": "1.1",
+                    "method": "PUT",
+                    "scheme": "http",
+                    "path": "/api/storage/local-photo-uploads",
+                    "query_string": b"",
+                    "headers": [
+                        (b"content-type", b"image/png"),
+                        (b"content-length", str(len(image_bytes)).encode()),
+                    ],
+                    "server": ("testserver", 80),
+                    "client": ("testclient", 123),
+                },
+                receive,
+            )
+
+        with tempfile.TemporaryDirectory() as storage_dir, patch.dict(
+            os.environ,
+            {"STORAGE_BACKEND": "local", "LOCAL_STORAGE_DIR": storage_dir},
+        ):
+            upload = request_profile_photo_upload("photo.png", 100, "image/png")
+            self.assertIn("/api/storage/local-photo-uploads/", upload["uploadURL"])
+            self.assertTrue(upload["objectPath"].endswith(".png"))
+
+            asyncio.run(upload_local_profile_photo(object_id, image_request()))
+            response = serve_storage_object(f"uploads/{object_id}", image_request())
+
+            self.assertEqual(response.media_type, "image/png")
+            self.assertEqual(Path(response.path).read_bytes(), image_bytes)
 
     def test_postgres_storage_initializes_binary_object_table(self):
         cursor = unittest.mock.Mock()

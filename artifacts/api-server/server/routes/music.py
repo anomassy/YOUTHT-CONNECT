@@ -13,7 +13,9 @@ from ..auth import require_auth, require_admin
 from ..database import db_cursor, insert_returning
 from ..storage import (
     MAX_AUDIO_SIZE,
+    MAX_PROFILE_PHOTO_SIZE,
     ALLOWED_AUDIO_EXTENSIONS,
+    PROFILE_PHOTO_EXTENSIONS,
     delete_database_object,
     delete_local_audio,
     get_database_object,
@@ -21,9 +23,12 @@ from ..storage import (
     local_audio_directory,
     local_audio_file,
     local_audio_path,
+    local_profile_photo_file,
+    local_profile_photo_path,
     request_audio_upload,
     save_database_object,
     save_local_audio,
+    save_local_profile_photo,
     uses_database_object_storage,
     uses_local_audio_storage,
 )
@@ -145,6 +150,49 @@ async def upload_local_audio(
     return {"uploaded": True}
 
 
+@router.put("/storage/local-photo-uploads/{object_id}", status_code=201)
+async def upload_local_profile_photo(object_id: str, request: Request):
+    if not uses_local_audio_storage():
+        raise HTTPException(404, "Local file storage is disabled.")
+
+    destination = local_profile_photo_path(object_id)
+    if destination.exists():
+        raise HTTPException(409, "This profile photo upload has already been used.")
+
+    content_type = request.headers.get("content-type", "").split(";", 1)[0].lower()
+    expected_extension = PROFILE_PHOTO_EXTENSIONS.get(content_type)
+    if expected_extension is None or destination.suffix.lower() != expected_extension:
+        raise HTTPException(415, "Profile photos must be JPG, PNG, or WebP images.")
+
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > MAX_PROFILE_PHOTO_SIZE:
+                raise HTTPException(413, "Profile photos must be 10 MB or smaller.")
+        except ValueError as exc:
+            raise HTTPException(400, "Invalid Content-Length header.") from exc
+
+    descriptor, temp_name = tempfile.mkstemp(
+        prefix=".profile-photo-upload-", suffix=".tmp", dir=local_audio_directory()
+    )
+    temp_path = local_audio_directory() / os.path.basename(temp_name)
+    total_size = 0
+    try:
+        with os.fdopen(descriptor, "wb") as output:
+            async for chunk in request.stream():
+                total_size += len(chunk)
+                if total_size > MAX_PROFILE_PHOTO_SIZE:
+                    raise HTTPException(413, "Profile photos must be 10 MB or smaller.")
+                output.write(chunk)
+        if total_size == 0:
+            raise HTTPException(400, "The uploaded profile photo is empty.")
+        save_local_profile_photo(object_id, temp_path)
+    finally:
+        if temp_path.exists():
+            temp_path.unlink()
+    return {"uploaded": True}
+
+
 @router.put("/storage/database-uploads/{object_id}", status_code=201)
 async def upload_database_object(object_id: str, request: Request):
     if not uses_database_object_storage():
@@ -208,6 +256,15 @@ def serve_storage_object(object_path: str, request: Request):
         object_id = normalized.removeprefix("uploads/")
         content, content_type = get_database_object(object_id)
         return _database_object_response(content, content_type, request.headers.get("range"))
+    if uses_local_audio_storage():
+        normalized = object_path.strip("/")
+        if not normalized.startswith("uploads/") or ".." in normalized:
+            raise HTTPException(404, "Stored file not found.")
+        object_id = normalized.removeprefix("uploads/")
+        if Path(object_id).suffix.lower() in set(PROFILE_PHOTO_EXTENSIONS.values()):
+            photo = local_profile_photo_file(object_id)
+            content_type = mimetypes.guess_type(photo.name)[0] or "application/octet-stream"
+            return FileResponse(photo, media_type=content_type)
     return RedirectResponse(get_audio_url(object_path), status_code=307)
 
 

@@ -12,7 +12,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { CheckSquare, Copy, Flag, Forward, Heart, Info, LockKeyhole, MessageCircle, MessageSquareQuote, Pin, Reply, Send, ShieldAlert, Star, Trash2, User as UserIcon, UserCircle, Users } from 'lucide-react';
+import { ArrowLeft, CheckSquare, Copy, Flag, Forward, Heart, Info, LockKeyhole, MessageCircle, MessageSquareQuote, Pin, Reply, Search, Send, Star, Trash2, User as UserIcon, UserCircle, Users } from 'lucide-react';
 import { formatDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -32,6 +32,7 @@ export default function Community() {
   const { anonAlias } = useAppContext();
   const [activeTab, setActiveTab] = useState('friends');
   const [directUserId, setDirectUserId] = useState<number | null>(null);
+  const [directSearch, setDirectSearch] = useState('');
   const [users, setUsers] = useState<ChatUser[]>([]);
   const [usersError, setUsersError] = useState('');
   const selectedMember = users.find((member) => member.id === directUserId);
@@ -43,7 +44,7 @@ export default function Community() {
       try {
         const freshToken = await getToken();
         if (!freshToken) throw new Error('Your session has expired. Sign in again.');
-        const response = await fetch('/api/chat/users', {
+        const response = await fetch('/api/chat/conversations', {
           headers: { Authorization: `Bearer ${freshToken}` },
         });
         const result = await response.json();
@@ -61,8 +62,20 @@ export default function Community() {
       }
     };
     void loadUsers();
-    return () => { active = false; };
-  }, [getToken, token]);
+    const intervalId = activeTab === 'direct'
+      ? window.setInterval(() => void loadUsers(), 10000)
+      : undefined;
+    return () => {
+      active = false;
+      if (intervalId !== undefined) window.clearInterval(intervalId);
+    };
+  }, [activeTab, getToken, token]);
+
+  const filteredUsers = users.filter((member) =>
+    `${member.firstName} ${member.lastName} ${member.username}`
+      .toLowerCase()
+      .includes(directSearch.trim().toLowerCase()),
+  );
   
   return (
     <div className="mx-auto flex h-[100dvh] max-w-6xl flex-col px-0 pt-safe md:h-screen md:p-6">
@@ -99,42 +112,94 @@ export default function Community() {
             <ChatRoom room="friends" title="Friends chat" displayName={user?.firstName || 'Friend'} userId={user?.id || 0} users={users} />
           </TabsContent>
           <TabsContent value="direct" className="absolute inset-0 mt-0 data-[state=active]:flex flex-col">
-            <div className="px-4 pb-3 md:px-0">
-              <label htmlFor="direct-message-user" className="sr-only">Choose a member</label>
-              <select
-                id="direct-message-user"
-                value={directUserId ?? ''}
-                onChange={(event) => setDirectUserId(event.target.value ? Number(event.target.value) : null)}
-                className="h-11 w-full rounded-xl border bg-card px-3 text-sm shadow-sm"
-              >
-                <option value="">Choose a member to message</option>
-                {users.map((member) => (
-                  <option key={member.id} value={member.id}>
-                    {member.firstName} {member.lastName} (@{member.username})
-                  </option>
-                ))}
-              </select>
-              {usersError && <p className="mt-2 text-sm text-destructive">{usersError}</p>}
+            <div className="grid min-h-0 flex-1 grid-rows-1 overflow-hidden border-y bg-card md:grid-cols-[minmax(260px,320px)_minmax(0,1fr)] md:rounded-2xl md:border">
+              <aside className={cn(
+                'flex min-h-0 flex-col border-r',
+                directUserId !== null && 'hidden md:flex',
+              )}>
+                <div className="space-y-3 border-b p-4">
+                  <div>
+                    <h2 className="font-semibold">Direct messages</h2>
+                    <p className="text-xs text-muted-foreground">Your conversations</p>
+                  </div>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                    <Input
+                      value={directSearch}
+                      onChange={(event) => setDirectSearch(event.target.value)}
+                      placeholder="Search people"
+                      aria-label="Search direct messages"
+                      className="h-10 rounded-xl bg-muted/50 pl-9"
+                    />
+                  </div>
+                  {usersError && <p role="alert" className="text-xs text-destructive">{usersError}</p>}
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto">
+                  {filteredUsers.length ? filteredUsers.map((member) => {
+                    const active = directUserId === member.id;
+                    const initials = `${member.firstName[0] ?? ''}${member.lastName[0] ?? ''}` || member.username[0] || '?';
+                    return (
+                      <button
+                        key={member.id}
+                        type="button"
+                        onClick={() => setDirectUserId(member.id)}
+                        aria-current={active ? 'true' : undefined}
+                        className={cn(
+                          'flex w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors hover:bg-muted/60',
+                          active && 'bg-muted',
+                        )}
+                      >
+                        <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                          {initials.toUpperCase()}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center justify-between gap-2">
+                            <span className="truncate text-sm font-medium">{member.firstName} {member.lastName}</span>
+                            {member.lastMessage && (
+                              <time className="shrink-0 text-[10px] text-muted-foreground">
+                                {new Date(member.lastMessage.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                              </time>
+                            )}
+                          </span>
+                          <span className="mt-1 block truncate text-xs text-muted-foreground">
+                            {member.lastMessage?.content ?? `@${member.username}`}
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  }) : (
+                    <p className="p-5 text-center text-sm text-muted-foreground">
+                      {users.length ? 'No people match your search.' : 'No other members are available yet.'}
+                    </p>
+                  )}
+                </div>
+              </aside>
+              <section className={cn(
+                'flex min-h-0 min-w-0 flex-col',
+                directUserId === null && 'hidden md:flex',
+              )}>
+                {directUserId !== null ? (
+                  <ChatRoom
+                    key={`dm-${directUserId}`}
+                    room="direct"
+                    title={selectedMember ? `${selectedMember.firstName} ${selectedMember.lastName}` : 'Direct message'}
+                    otherUserId={directUserId}
+                    displayName={user?.firstName || 'Friend'}
+                    userId={user?.id || 0}
+                    users={users}
+                    onBack={() => setDirectUserId(null)}
+                  />
+                ) : (
+                  <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+                    <span className="flex size-14 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      <MessageCircle className="size-6" aria-hidden="true" />
+                    </span>
+                    <p className="font-medium">Choose a conversation</p>
+                    <p className="max-w-xs text-sm text-muted-foreground">Select a member to start or continue a private conversation.</p>
+                  </div>
+                )}
+              </section>
             </div>
-            {directUserId ? (
-              <ChatRoom
-                key={`dm-${directUserId}`}
-                room="direct"
-                title={selectedMember ? `${selectedMember.firstName} ${selectedMember.lastName}` : 'Direct message'}
-                otherUserId={directUserId}
-                displayName={user?.firstName || 'Friend'}
-                userId={user?.id || 0}
-                users={users}
-              />
-            ) : (
-              <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
-                <span className="flex size-14 items-center justify-center rounded-full bg-primary/10 text-primary">
-                  <MessageCircle className="size-6" aria-hidden="true" />
-                </span>
-                <p className="font-medium">Choose someone to message</p>
-                <p className="max-w-xs text-sm text-muted-foreground">Select a community member above to start a one-to-one conversation.</p>
-              </div>
-            )}
           </TabsContent>
           <TabsContent value="anonymous" className="absolute inset-0 mt-0 data-[state=active]:flex flex-col">
             <ChatRoom room="anonymous" title="Anonymous chat" displayName={anonAlias} userId={user?.id || 0} users={users} />
@@ -148,7 +213,18 @@ export default function Community() {
   );
 }
 
-type ChatUser = { id: number; firstName: string; lastName: string; username: string };
+type ChatUser = {
+  id: number;
+  firstName: string;
+  lastName: string;
+  username: string;
+  lastMessage: {
+    userId: number;
+    displayName: string;
+    content: string;
+    createdAt: string;
+  } | null;
+};
 type ChatMessage = {
   id: number;
   room: string;
@@ -170,6 +246,7 @@ function ChatRoom({
   displayName,
   userId,
   users,
+  onBack,
 }: {
   room: 'friends' | 'anonymous' | 'direct';
   title: string;
@@ -177,6 +254,7 @@ function ChatRoom({
   displayName: string;
   userId: number;
   users: ChatUser[];
+  onBack?: () => void;
 }) {
   const { token, getToken } = useAuth();
   const { toast } = useToast();
@@ -191,6 +269,7 @@ function ChatRoom({
   const [selectedMessageIds, setSelectedMessageIds] = useState<number[]>([]);
   const [loadError, setLoadError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [isSending, setIsSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const touchStartX = useRef<number | null>(null);
   const conversationPath = room === 'direct' ? `/api/chat/dm/${otherUserId}` : `/api/chat/${room}`;
@@ -246,9 +325,13 @@ function ChatRoom({
     });
     const result = await response.json();
     if (!response.ok) throw new Error(result.detail || 'Could not send message.');
-    if (room === 'direct' && targetUserId === otherUserId) {
-      setMessages((current) => [...current, result.message as ChatMessage]);
+    const sentMessage = result.message as ChatMessage;
+    if (room !== 'direct' || targetUserId === otherUserId) {
+      setMessages((current) => current.some((item) => item.id === sentMessage.id)
+        ? current
+        : [...current, sentMessage]);
     }
+    return sentMessage;
   };
 
   const requestMessageAction = async (
@@ -391,16 +474,9 @@ function ChatRoom({
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!message.trim()) return;
+    setIsSending(true);
     try {
       await sendMessage(message.trim(), replyTo?.id ?? null);
-      if (room !== 'direct') {
-        const token = await getToken();
-        if (!token) throw new Error('Your session has expired. Sign in again.');
-        const response = await fetch(conversationPath, { headers: { Authorization: `Bearer ${token}` } });
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.detail || 'Message sent but refresh failed.');
-        setMessages(result.messages as ChatMessage[]);
-      }
       setMessage('');
       setReplyTo(null);
     } catch (error) {
@@ -409,12 +485,26 @@ function ChatRoom({
         description: error instanceof Error ? error.message : 'Please try again.',
         variant: 'destructive',
       });
+    } finally {
+      setIsSending(false);
     }
   };
 
   return (
     <Card className="flex h-full flex-1 flex-col overflow-hidden rounded-none border-x-0 bg-card shadow-none md:rounded-2xl md:border-x md:shadow-sm">
       <div className="flex flex-shrink-0 items-center gap-3 border-b px-4 py-3">
+        {onBack && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-9 shrink-0 md:hidden"
+            aria-label="Back to conversations"
+            onClick={onBack}
+          >
+            <ArrowLeft className="size-4" aria-hidden="true" />
+          </Button>
+        )}
         <span className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
           {room === 'anonymous' ? <UserCircle className="size-5" aria-hidden="true" /> : <Users className="size-5" aria-hidden="true" />}
         </span>
@@ -426,16 +516,13 @@ function ChatRoom({
           <LockKeyhole className="size-3.5" aria-hidden="true" /> Signed-in member
         </span>
       </div>
-      <div className="flex-shrink-0 border-b border-amber-500/20 bg-amber-500/5 px-4 py-2.5">
-        <p className="flex items-start gap-2 text-xs leading-relaxed text-foreground/80">
-          <ShieldAlert className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
-          <span>Messages are not end-to-end encrypted yet. Avoid sharing sensitive or confidential information.</span>
-        </p>
-      </div>
-      <div className="flex-1 space-y-4 overflow-y-auto bg-muted/15 p-4" ref={scrollRef} aria-live="polite">
-        {isLoading ? (
+      <div className={cn(
+        'flex-1 space-y-4 overflow-y-auto p-4',
+        room === 'direct' ? 'bg-[#efeae2] dark:bg-slate-950' : 'bg-muted/15',
+      )} ref={scrollRef} aria-live="polite">
+        {isLoading && messages.length === 0 ? (
           <div className="flex justify-center p-4 text-muted-foreground"><div className="size-5 animate-spin rounded-full border-2 border-primary border-t-transparent" aria-label="Loading messages" /></div>
-        ) : loadError ? (
+        ) : loadError && messages.length === 0 ? (
           <p role="alert" className="text-center py-8 text-sm text-destructive">{loadError}</p>
         ) : messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 py-12 text-center text-muted-foreground">
@@ -492,7 +579,13 @@ function ChatRoom({
                   }}
                   className={cn(
                   "whitespace-pre-wrap break-words rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm",
-                  isMe ? "rounded-tr-sm bg-primary text-primary-foreground" : "rounded-tl-sm border bg-card"
+                  isMe
+                    ? room === 'direct'
+                      ? "rounded-tr-sm bg-[#d9fdd3] text-[#111b21] dark:bg-emerald-900 dark:text-emerald-50"
+                      : "rounded-tr-sm bg-primary text-primary-foreground"
+                    : room === 'direct'
+                      ? "rounded-tl-sm border-0 bg-white text-[#111b21] dark:bg-slate-800 dark:text-slate-50"
+                      : "rounded-tl-sm border bg-card"
                 )}>
                   {msg.replyTo && (
                     <div className="mb-2 border-l-2 border-current/40 pl-2 text-xs opacity-80">
@@ -562,6 +655,11 @@ function ChatRoom({
             );
           })
         )}
+        {loadError && messages.length > 0 && (
+          <p role="status" className="text-center text-xs text-muted-foreground">
+            Could not refresh messages. Retrying automatically.
+          </p>
+        )}
       </div>
       <div className="mt-auto flex-shrink-0 border-t bg-card p-3 sm:p-4">
         {selectionMode && (
@@ -630,7 +728,7 @@ function ChatRoom({
             aria-label="Write a message"
             className="h-11 flex-1 rounded-full border-transparent bg-muted/60 px-4 focus-visible:ring-1"
           />
-          <Button type="submit" size="icon" aria-label="Send message" disabled={!message.trim()} className="size-11 flex-shrink-0 rounded-full shadow-sm">
+          <Button type="submit" size="icon" aria-label="Send message" disabled={!message.trim() || isSending} className="size-11 flex-shrink-0 rounded-full shadow-sm">
             <Send className="size-4" />
           </Button>
         </form>

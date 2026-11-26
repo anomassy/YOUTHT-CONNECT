@@ -11,6 +11,7 @@ from fastapi import HTTPException
 
 SIDECAR_ENDPOINT = "http://127.0.0.1:1106"
 MAX_AUDIO_SIZE = 100 * 1024 * 1024
+MAX_PROFILE_PHOTO_SIZE = 10 * 1024 * 1024
 ALLOWED_AUDIO_EXTENSIONS = {
     ".aac",
     ".aif",
@@ -24,6 +25,11 @@ ALLOWED_AUDIO_EXTENSIONS = {
     ".wav",
     ".webm",
     ".wma",
+}
+PROFILE_PHOTO_EXTENSIONS = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
 }
 
 
@@ -112,6 +118,35 @@ def local_audio_path(object_id: str) -> Path:
     return local_audio_directory() / filename.name
 
 
+def local_profile_photo_path(object_id: str) -> Path:
+    filename = Path(object_id)
+    try:
+        UUID(filename.stem)
+    except ValueError as exc:
+        raise HTTPException(404, "Profile photo not found.") from exc
+    if (
+        filename.name != object_id
+        or filename.suffix.lower() not in set(PROFILE_PHOTO_EXTENSIONS.values())
+    ):
+        raise HTTPException(404, "Profile photo not found.")
+    return local_audio_directory() / filename.name
+
+
+def local_profile_photo_file(object_id: str) -> Path:
+    path = local_profile_photo_path(object_id)
+    if not path.is_file():
+        raise HTTPException(404, "Profile photo not found.")
+    return path
+
+
+def save_local_profile_photo(object_id: str, file_path: Path) -> Path:
+    destination = local_profile_photo_path(object_id)
+    if destination.exists():
+        raise HTTPException(409, "This profile photo upload has already been used.")
+    file_path.replace(destination)
+    return destination
+
+
 def request_audio_upload(name: str, size: int, content_type: str) -> dict:
     if not name.strip() or size <= 0:
         raise HTTPException(400, "A valid audio file is required.")
@@ -174,17 +209,26 @@ def delete_local_audio(object_path: str) -> None:
 def request_profile_photo_upload(name: str, size: int, content_type: str) -> dict:
     if not name.strip() or size <= 0:
         raise HTTPException(400, "A valid profile photo is required.")
-    if size > 10 * 1024 * 1024:
+    if size > MAX_PROFILE_PHOTO_SIZE:
         raise HTTPException(400, "Profile photos must be 10 MB or smaller.")
-    if content_type.lower() not in {"image/jpeg", "image/png", "image/webp"}:
+    normalized_content_type = content_type.lower()
+    if normalized_content_type not in PROFILE_PHOTO_EXTENSIONS:
         raise HTTPException(400, "Profile photos must be JPG, PNG, or WebP images.")
 
-    object_id = str(uuid4())
     if uses_database_object_storage():
+        object_id = str(uuid4())
         return {
             "uploadURL": f"/api/storage/database-uploads/{object_id}",
             "objectPath": f"/objects/uploads/{object_id}",
         }
+    if uses_local_audio_storage():
+        object_id = f"{uuid4()}{PROFILE_PHOTO_EXTENSIONS[normalized_content_type]}"
+        return {
+            "uploadURL": f"/api/storage/local-photo-uploads/{object_id}",
+            "objectPath": f"/objects/uploads/{object_id}",
+        }
+
+    object_id = str(uuid4())
     bucket_name, private_prefix = _storage_location()
     object_name = f"{private_prefix}/uploads/{object_id}"
     return {
