@@ -81,10 +81,12 @@ export default function Login() {
           login(res.token, res.user);
           setLocation('/');
         },
-        onError: () => {
+        onError: (error) => {
           toast({
             title: 'Login failed',
-            description: 'Please check your credentials and try again.',
+            description: error instanceof Error
+              ? error.message
+              : 'Please check your credentials and try again.',
             variant: 'destructive',
           });
         },
