@@ -1,4 +1,4 @@
-import { table, serial, text, timestamp } from "./dialect";
+import { table, serial, text, timestamp, varchar } from "./dialect";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -9,6 +9,7 @@ export const usersTable = table("users", {
   username: text("username").notNull().unique(),
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
+  clerkId: varchar("clerk_id", { length: 255 }).unique(),
   bio: text("bio").default(""),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -19,4 +20,4 @@ export const insertUserSchema = createInsertSchema(usersTable).omit({
 });
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof usersTable.$inferSelect;
-export type PublicUser = Omit<User, "passwordHash">;
+export type PublicUser = Omit<User, "passwordHash" | "clerkId">;

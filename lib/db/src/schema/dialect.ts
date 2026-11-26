@@ -5,6 +5,7 @@ import {
   serial as pgSerial,
   text as pgText,
   timestamp as pgTimestamp,
+  varchar as pgVarchar,
 } from "drizzle-orm/pg-core";
 import {
   boolean as mysqlBoolean,
@@ -13,6 +14,7 @@ import {
   serial as mysqlSerial,
   text as mysqlText,
   timestamp as mysqlTimestamp,
+  varchar as mysqlVarchar,
 } from "drizzle-orm/mysql-core";
 
 const getDialect = () => {
@@ -32,5 +34,6 @@ export const table: any = isMySql ? mysqlTableFn : pgTableFn;
 export const serial: any = isMySql ? mysqlSerial : pgSerial;
 export const integer: any = isMySql ? mysqlInt : pgInteger;
 export const text: any = isMySql ? mysqlText : pgText;
+export const varchar: any = isMySql ? mysqlVarchar : pgVarchar;
 export const timestamp: any = isMySql ? mysqlTimestamp : pgTimestamp;
 export const boolean: any = isMySql ? mysqlBoolean : pgBoolean;
